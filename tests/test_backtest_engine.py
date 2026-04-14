@@ -10,7 +10,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -20,18 +20,18 @@ from backtest.engine import (
     _close_position,
     _compute_metrics,
     _max_drawdown,
-    _process_bar,
+    _process_bar_config,
     _sharpe,
-    _simulate,
+    _simulate_config,
     _to_dataframe,
     _trade_metrics,
     _ts_to_iso,
     _BALANCE,
-    _MIN_CANDLES,
-    _RSI_THRESHOLD,
+    _RSI_PERIOD,
     _SL_PCT,
     _TP_PCT,
 )
+from strategy.indicators import rsi, sma
 
 
 # ---------------------------------------------------------------------------
@@ -45,8 +45,8 @@ def _make_df(
 ) -> pd.DataFrame:
     """Synthesise a DataFrame of *n* candles with optional linear trend.
 
-    Adds a ±0.2 oscillation so close prices are never perfectly flat —
-    a flat series yields RSI = 0/0 = NaN, skipping every bar.
+    Adds ±0.2 oscillation so the series is never perfectly flat — a flat
+    series yields RSI = 0/0 = NaN, skipping every bar in simulation.
     """
     rows = []
     price = close
@@ -113,46 +113,72 @@ class TestClosePosition(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# _process_bar — entry
+# _process_bar_config — entry (data-driven, no signal patching needed)
 # ---------------------------------------------------------------------------
 
-class TestProcessBarEntry(unittest.TestCase):
+class TestProcessBarConfigEntry(unittest.TestCase):
 
-    def test_opens_position_when_signal_fires(self):
-        with patch('backtest.engine.should_enter', return_value=True):
-            new_pos, balance, trade = _process_bar(
-                100.0, 95.0, 30.0, 1000, None, 10_000.0,
-            )
+    def test_opens_when_rsi_below_threshold_and_close_above_sma(self):
+        # rsi=30 < 35, close=105 > sma=100 → enter
+        new_pos, _, trade = _process_bar_config(105.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0)
         self.assertIsNotNone(new_pos)
-        self.assertAlmostEqual(new_pos['entry_price'], 100.0)
+        self.assertAlmostEqual(new_pos['entry_price'], 105.0)
         self.assertIsNone(trade)
 
-    def test_no_position_when_signal_does_not_fire(self):
-        with patch('backtest.engine.should_enter', return_value=False):
-            new_pos, balance, trade = _process_bar(
-                100.0, 95.0, 55.0, 1000, None, 10_000.0,
-            )
+    def test_no_entry_when_rsi_above_threshold(self):
+        # rsi=40 >= 35 → no entry
+        new_pos, _, _ = _process_bar_config(105.0, 100.0, 40.0, 1000, None, _BALANCE, 35.0)
         self.assertIsNone(new_pos)
-        self.assertIsNone(trade)
 
-    def test_qty_is_risk_fraction_of_balance_divided_by_close(self):
-        # With _BALANCE=10000 and _RISK_PCT=0.01, risk_usdt=100 → qty=100/100=1.0
-        with patch('backtest.engine.should_enter', return_value=True):
-            new_pos, _, _ = _process_bar(100.0, 95.0, 30.0, 0, None, _BALANCE)
-        expected_qty = (_BALANCE * 0.01) / 100.0
+    def test_no_entry_when_close_below_sma(self):
+        # close=95 < sma=100 → no entry even with oversold RSI
+        new_pos, _, _ = _process_bar_config(95.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0)
+        self.assertIsNone(new_pos)
+
+    def test_no_entry_when_both_conditions_unmet(self):
+        new_pos, _, _ = _process_bar_config(95.0, 100.0, 40.0, 1000, None, _BALANCE, 35.0)
+        self.assertIsNone(new_pos)
+
+    def test_opens_when_sma_val_is_none(self):
+        # sma_val=None disables SMA filter; RSI alone decides
+        new_pos, _, _ = _process_bar_config(95.0, None, 30.0, 1000, None, _BALANCE, 35.0)
+        self.assertIsNotNone(new_pos)
+
+    def test_no_entry_with_none_sma_when_rsi_above_threshold(self):
+        new_pos, _, _ = _process_bar_config(95.0, None, 40.0, 1000, None, _BALANCE, 35.0)
+        self.assertIsNone(new_pos)
+
+    def test_higher_threshold_allows_more_entries(self):
+        # rsi=42 would be blocked at threshold=35 but allowed at threshold=45
+        self.assertIsNone(
+            _process_bar_config(105.0, 100.0, 42.0, 0, None, _BALANCE, 35.0)[0]
+        )
+        self.assertIsNotNone(
+            _process_bar_config(105.0, 100.0, 42.0, 0, None, _BALANCE, 45.0)[0]
+        )
+
+    def test_qty_equals_risk_fraction_of_balance_divided_by_close(self):
+        new_pos, _, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0)
+        expected_qty = (_BALANCE * 0.01) / 100.0   # _RISK_PCT = 0.01
         self.assertAlmostEqual(new_pos['qty'], expected_qty, places=6)
 
+    def test_balance_is_unchanged_on_entry(self):
+        _, balance, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0)
+        self.assertAlmostEqual(balance, _BALANCE)
+
 
 # ---------------------------------------------------------------------------
-# _process_bar — exit
+# _process_bar_config — exit
 # ---------------------------------------------------------------------------
 
-class TestProcessBarExit(unittest.TestCase):
+class TestProcessBarConfigExit(unittest.TestCase):
 
     def test_closes_on_take_profit(self):
         pos = _position(entry=100.0, qty=1.0)
         with patch('backtest.engine.check_exit', return_value='take_profit'):
-            new_pos, _, trade = _process_bar(103.0, 100.0, 50.0, 1000, pos, 10_000.0)
+            new_pos, _, trade = _process_bar_config(
+                103.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0,
+            )
         self.assertIsNone(new_pos)
         self.assertIsNotNone(trade)
         self.assertEqual(trade['reason'], 'take_profit')
@@ -160,56 +186,80 @@ class TestProcessBarExit(unittest.TestCase):
     def test_closes_on_stop_loss(self):
         pos = _position(entry=100.0, qty=1.0)
         with patch('backtest.engine.check_exit', return_value='stop_loss'):
-            new_pos, _, trade = _process_bar(98.0, 100.0, 50.0, 1000, pos, 10_000.0)
+            new_pos, _, trade = _process_bar_config(
+                98.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0,
+            )
         self.assertIsNone(new_pos)
         self.assertIsNotNone(trade)
         self.assertEqual(trade['reason'], 'stop_loss')
 
-    def test_holds_position_when_no_exit(self):
+    def test_holds_position_when_no_exit_signal(self):
         pos = _position(entry=100.0, qty=1.0)
         with patch('backtest.engine.check_exit', return_value=None):
-            new_pos, _, trade = _process_bar(101.0, 100.0, 50.0, 1000, pos, 10_000.0)
+            new_pos, _, trade = _process_bar_config(
+                101.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0,
+            )
         self.assertIs(new_pos, pos)
         self.assertIsNone(trade)
 
+    def test_balance_increases_on_winning_exit(self):
+        pos = _position(entry=100.0, qty=1.0)
+        with patch('backtest.engine.check_exit', return_value='take_profit'):
+            _, new_balance, _ = _process_bar_config(
+                103.0, None, 50.0, 1000, pos, 10_000.0, 35.0,
+            )
+        self.assertGreater(new_balance, 10_000.0)
+
 
 # ---------------------------------------------------------------------------
-# _simulate — integration with synthetic data
+# _simulate_config
 # ---------------------------------------------------------------------------
 
-class TestSimulate(unittest.TestCase):
+class TestSimulateConfig(unittest.TestCase):
 
-    def test_no_trades_when_no_signal(self):
-        df = _make_df(100)
-        with patch('backtest.engine.should_enter', return_value=False):
-            trades, equity = _simulate(df)
+    def test_no_trades_when_rsi_threshold_is_zero(self):
+        """rsi < 0.0 is never true — no entries should fire."""
+        df    = _make_df(100)
+        rsi_s = rsi(df, 14)
+        trades, equity = _simulate_config(df, rsi_s, None, 0.0, 14)
         self.assertEqual(len(trades), 0)
         self.assertEqual(equity, [_BALANCE])
 
-    def test_trade_is_recorded_and_equity_updated(self):
-        df = _make_df(100)
-        # open on first entry call, close on first exit call
-        enter_seq = iter([True]  + [False] * 200)
-        exit_seq  = iter(['take_profit'] + [None] * 200)
-
-        with patch('backtest.engine.should_enter', side_effect=lambda *_: next(enter_seq)), \
-             patch('backtest.engine.check_exit',   side_effect=lambda *_: next(exit_seq)):
-            trades, equity = _simulate(df)
-
+    def test_trade_recorded_on_entry_then_exit(self):
+        """High threshold forces entry; patched check_exit closes on first call."""
+        df    = _make_df(100)
+        rsi_s = rsi(df, 14)
+        exit_seq = iter(['take_profit'] + [None] * 500)
+        with patch('backtest.engine.check_exit', side_effect=lambda *_: next(exit_seq)):
+            trades, equity = _simulate_config(df, rsi_s, None, 60.0, 14)
         self.assertEqual(len(trades), 1)
-        self.assertEqual(len(equity), 2)  # initial + after close
+        self.assertEqual(len(equity), 2)    # initial + post-close
 
     def test_balance_updates_after_trade(self):
-        df = _make_df(100, close=100.0)
-        enter_seq = iter([True]  + [False] * 200)
-        exit_seq  = iter(['take_profit'] + [None] * 200)
-
-        with patch('backtest.engine.should_enter', side_effect=lambda *_: next(enter_seq)), \
-             patch('backtest.engine.check_exit',   side_effect=lambda *_: next(exit_seq)), \
+        df    = _make_df(100)
+        rsi_s = rsi(df, 14)
+        exit_seq = iter(['take_profit'] + [None] * 500)
+        with patch('backtest.engine.check_exit', side_effect=lambda *_: next(exit_seq)), \
              patch('backtest.engine.calc_pnl', return_value=(50.0, 5.0)):
-            trades, equity = _simulate(df)
-
+            _, equity = _simulate_config(df, rsi_s, None, 60.0, 14)
         self.assertAlmostEqual(equity[-1], _BALANCE + 50.0, places=4)
+
+    def test_sma_filter_blocks_entry_when_close_below_sma(self):
+        """SMA series higher than every close price → SMA filter blocks all entries."""
+        df    = _make_df(100, close=100.0)
+        rsi_s = rsi(df, 14)
+        # Build an artificially high SMA series (all values = 200)
+        high_sma = pd.Series([200.0] * len(df), index=df.index)
+        trades, equity = _simulate_config(df, rsi_s, high_sma, 60.0, 14)
+        self.assertEqual(len(trades), 0)
+
+    def test_respects_min_candles_offset(self):
+        """Bars before min_candles are skipped; with tight window only last bars processed."""
+        df    = _make_df(20)          # exactly 20 candles
+        rsi_s = rsi(df, 14)
+        # min_candles=19 → only bar 19 is processed; with threshold=0 no entry fires
+        trades, _ = _simulate_config(df, rsi_s, None, 0.0, 19)
+        self.assertEqual(len(trades), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -225,15 +275,14 @@ class TestMaxDrawdown(unittest.TestCase):
         self.assertAlmostEqual(_max_drawdown([100.0, 110.0, 120.0]), 0.0)
 
     def test_calculates_correct_drawdown(self):
-        # Peak=110, trough=88 → dd=(110-88)/110=0.2
+        # Peak=110, trough=88 → dd = (110-88)/110
         dd = _max_drawdown([100.0, 110.0, 88.0, 95.0])
         self.assertAlmostEqual(dd, (110 - 88) / 110, places=6)
 
     def test_largest_drawdown_is_returned(self):
-        # Two drops: 100→90 (10%) and 110→95 (13.6%)
+        # Two drops: 100→90 (9.1%) and 110→95 (13.6%) — second is larger
         dd = _max_drawdown([100.0, 90.0, 110.0, 95.0])
-        expected = (110 - 95) / 110
-        self.assertAlmostEqual(dd, expected, places=6)
+        self.assertAlmostEqual(dd, (110 - 95) / 110, places=6)
 
 
 # ---------------------------------------------------------------------------
@@ -250,14 +299,10 @@ class TestSharpe(unittest.TestCase):
         self.assertEqual(_sharpe([0.03, 0.03, 0.03]), 0.0)
 
     def test_positive_sharpe_for_consistent_wins(self):
-        returns = [0.02, 0.03, 0.025, 0.031, 0.028]
-        sharpe  = _sharpe(returns)
-        self.assertGreater(sharpe, 0)
+        self.assertGreater(_sharpe([0.02, 0.03, 0.025, 0.031, 0.028]), 0)
 
     def test_negative_sharpe_for_consistent_losses(self):
-        returns = [-0.02, -0.03, -0.025]
-        sharpe  = _sharpe(returns)
-        self.assertLess(sharpe, 0)
+        self.assertLess(_sharpe([-0.02, -0.03, -0.025]), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +333,7 @@ class TestTradeMetrics(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# _compute_metrics
+# _compute_metrics (single-run API, kept for backward compat)
 # ---------------------------------------------------------------------------
 
 class TestComputeMetrics(unittest.TestCase):
@@ -314,8 +359,7 @@ class TestComputeMetrics(unittest.TestCase):
         trades = [{'pnl_usdt': 10.0, 'pnl_pct': 1.0, 'result': 'WIN',
                    'entry_price': 100.0, 'exit_price': 101.0, 'qty': 1.0,
                    'reason': 'take_profit', 'entry_ts': 0, 'exit_ts': 60_000}]
-        equity = [_BALANCE, _BALANCE + 10.0]
-        report = _compute_metrics(trades, equity, df)
+        report = _compute_metrics(trades, [_BALANCE, _BALANCE + 10.0], df)
         self.assertIn('trades', report)
         self.assertEqual(len(report['trades']), 1)
 
