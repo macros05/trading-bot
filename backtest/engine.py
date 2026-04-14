@@ -1,6 +1,8 @@
 """
 Backtest engine — replays BTC/USDT 1m data from Binance production through
-the strategy and sweeps 6 entry-condition combinations.
+the strategy, runs two sweeps:
+  1. Multi-param entry conditions (RSI threshold × SMA period)
+  2. SL/TP optimisation for the best entry config (RSI<40 + SMA20)
 
 Usage (from project root):
     python3 -m backtest.engine
@@ -11,7 +13,7 @@ import logging
 import math
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,7 +34,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ── fixed parameters (SL/TP/sizing come from config.py) ───────────────────
+# ── fixed parameters ───────────────────────────────────────────────────────
 _SYMBOL        = BOT_CONFIG['symbol']
 _TIMEFRAME     = BOT_CONFIG['timeframe']
 _BALANCE       = float(BOT_CONFIG.get('paper_balance', 10_000.0))
@@ -43,26 +45,42 @@ _RSI_PERIOD    = 14
 _LOOKBACK_DAYS = 90
 _PAGE_SIZE     = 1000
 _RESULTS_DIR   = Path(__file__).parent / 'results'
-_REPORT_FILE   = _RESULTS_DIR / 'report.json'       # kept for backward compat
+_REPORT_FILE   = _RESULTS_DIR / 'report.json'         # kept for tests
 _MULTI_FILE    = _RESULTS_DIR / 'multi_report.json'
+_SLTP_FILE     = _RESULTS_DIR / 'sltp_report.json'
 
 
-# ── parameter combinations ─────────────────────────────────────────────────
+# ── parameter set ──────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class ParamSet:
     label:         str
     rsi_threshold: float
     sma_period:    int | None   # None = no SMA filter
+    sl_pct:        float = field(default=0.02)
+    tp_pct:        float = field(default=0.03)
 
+
+# ── sweep 1: entry-condition combinations (SL/TP fixed from config) ────────
 
 _PARAM_SETS: list[ParamSet] = [
-    ParamSet('RSI<35 + SMA20',   35.0, 20),
-    ParamSet('RSI<40 + SMA20',   40.0, 20),
-    ParamSet('RSI<45 + SMA20',   45.0, 20),
-    ParamSet('RSI<35 + SMA50',   35.0, 50),
-    ParamSet('RSI<40 + SMA50',   40.0, 50),
-    ParamSet('RSI<35  (no SMA)', 35.0, None),
+    ParamSet('RSI<35 + SMA20',   35.0, 20, _SL_PCT, _TP_PCT),
+    ParamSet('RSI<40 + SMA20',   40.0, 20, _SL_PCT, _TP_PCT),
+    ParamSet('RSI<45 + SMA20',   45.0, 20, _SL_PCT, _TP_PCT),
+    ParamSet('RSI<35 + SMA50',   35.0, 50, _SL_PCT, _TP_PCT),
+    ParamSet('RSI<40 + SMA50',   40.0, 50, _SL_PCT, _TP_PCT),
+    ParamSet('RSI<35  (no SMA)', 35.0, None, _SL_PCT, _TP_PCT),
+]
+
+# ── sweep 2: SL/TP optimisation for RSI<40 + SMA20 ────────────────────────
+
+_SLTP_SETS: list[ParamSet] = [
+    ParamSet('SL2.0% / TP3.0% (base)', 40.0, 20, 0.020, 0.030),
+    ParamSet('SL1.5% / TP2.5%',        40.0, 20, 0.015, 0.025),
+    ParamSet('SL1.5% / TP3.0%',        40.0, 20, 0.015, 0.030),
+    ParamSet('SL2.0% / TP3.5%',        40.0, 20, 0.020, 0.035),
+    ParamSet('SL2.0% / TP4.0%',        40.0, 20, 0.020, 0.040),
+    ParamSet('SL2.5% / TP4.0%',        40.0, 20, 0.025, 0.040),
 ]
 
 
@@ -99,12 +117,12 @@ def _fetch_historical(exchange: ccxt.binance) -> pd.DataFrame:
             break
         rows.extend(page)
         pages   += 1
-        current  = page[-1][0] + 60_000       # next minute after last bar
+        current  = page[-1][0] + 60_000
         if pages % 10 == 0:
             logger.info('fetching pages=%d candles=%d', pages, len(rows))
         if len(page) < _PAGE_SIZE:
             break
-        time.sleep(0.25)                       # stay well under rate limits
+        time.sleep(0.25)
 
     logger.info('fetch_complete pages=%d total_candles=%d', pages, len(rows))
     return _to_dataframe(rows)
@@ -142,11 +160,11 @@ def _process_bar_config(
     position: dict | None,
     balance: float,
     rsi_threshold: float,
+    sl_pct: float,
+    tp_pct: float,
 ) -> tuple[dict | None, float, dict | None]:
     """Return (new_position, new_balance, closed_trade_or_None).
-
-    sma_val=None disables the SMA filter so entry fires on RSI alone.
-    """
+    sma_val=None disables the SMA filter (entry on RSI alone)."""
     if position is None:
         rsi_ok = rsi_val < rsi_threshold
         sma_ok = sma_val is None or close > sma_val
@@ -155,7 +173,7 @@ def _process_bar_config(
             return {'entry_price': close, 'qty': qty, 'entry_ts': ts}, balance, None
         return None, balance, None
 
-    reason = check_exit(close, position['entry_price'], _SL_PCT, _TP_PCT)
+    reason = check_exit(close, position['entry_price'], sl_pct, tp_pct)
     if reason:
         trade, new_balance = _close_position(position, close, ts, reason, balance)
         return None, new_balance, trade
@@ -168,6 +186,8 @@ def _simulate_config(
     sma_s: pd.Series | None,
     rsi_threshold: float,
     min_candles: int,
+    sl_pct: float,
+    tp_pct: float,
 ) -> tuple[list[dict], list[float]]:
     balance  = _BALANCE
     trades:   list[dict]  = []
@@ -181,7 +201,8 @@ def _simulate_config(
         if pd.isna(rsi_val) or (sma_val is not None and pd.isna(sma_val)):
             continue
         position, balance, trade = _process_bar_config(
-            close, sma_val, rsi_val, int(df['ts'].iloc[i]), position, balance, rsi_threshold,
+            close, sma_val, rsi_val, int(df['ts'].iloc[i]),
+            position, balance, rsi_threshold, sl_pct, tp_pct,
         )
         if trade:
             trades.append(trade)
@@ -217,6 +238,14 @@ def _sharpe(returns: list[float]) -> float:
 
 def _ts_to_iso(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _make_period(df: pd.DataFrame) -> dict:
+    return {
+        'from':    _ts_to_iso(int(df['ts'].iloc[0])),
+        'to':      _ts_to_iso(int(df['ts'].iloc[-1])),
+        'candles': len(df),
+    }
 
 
 def _trade_metrics(trades: list[dict], equity: list[float]) -> dict:
@@ -292,11 +321,14 @@ def _log_summary(report: dict) -> None:
     logger.info(sep)
 
 
-# ── multi-parameter sweep ──────────────────────────────────────────────────
+# ── generic param sweep ────────────────────────────────────────────────────
 
-def _precompute_sma_cache(df: pd.DataFrame) -> dict[int, pd.Series]:
-    """Compute each unique SMA period needed by _PARAM_SETS exactly once."""
-    periods = {p.sma_period for p in _PARAM_SETS if p.sma_period is not None}
+def _precompute_sma_cache(
+    df: pd.DataFrame,
+    param_sets: list[ParamSet],
+) -> dict[int, pd.Series]:
+    """Compute each unique SMA period needed by param_sets exactly once."""
+    periods = {p.sma_period for p in param_sets if p.sma_period is not None}
     return {period: sma(df, period) for period in periods}
 
 
@@ -308,34 +340,42 @@ def _run_one_config(
 ) -> dict:
     sma_s      = sma_cache.get(params.sma_period) if params.sma_period is not None else None
     min_c      = max(_RSI_PERIOD, params.sma_period or 0)
-    trades, eq = _simulate_config(df, rsi_s, sma_s, params.rsi_threshold, min_c)
+    trades, eq = _simulate_config(
+        df, rsi_s, sma_s, params.rsi_threshold, min_c, params.sl_pct, params.tp_pct,
+    )
     result: dict = {
-        'label':         params.label,
-        'parameters':    {'rsi_threshold': params.rsi_threshold, 'sma_period': params.sma_period},
-        'num_trades':    len(trades),
-        'sharpe_ratio':  0.0,             # default when no trades
+        'label':        params.label,
+        'parameters':   {'rsi_threshold': params.rsi_threshold, 'sma_period': params.sma_period,
+                         'sl_pct': params.sl_pct, 'tp_pct': params.tp_pct},
+        'num_trades':   len(trades),
+        'sharpe_ratio': 0.0,
     }
     if trades:
         result.update(_trade_metrics(trades, eq))
         result['trades'] = trades
-    logger.info('config=%-22s trades=%d', params.label, len(trades))
+    logger.info('config=%-26s trades=%d', params.label, len(trades))
     return result
 
 
-def _run_multi_analysis(df: pd.DataFrame) -> list[dict]:
+def _run_param_sweep(
+    df: pd.DataFrame,
+    param_sets: list[ParamSet],
+) -> list[dict]:
     rsi_s     = rsi(df, _RSI_PERIOD)
-    sma_cache = _precompute_sma_cache(df)
-    return [_run_one_config(df, rsi_s, sma_cache, p) for p in _PARAM_SETS]
+    sma_cache = _precompute_sma_cache(df, param_sets)
+    return [_run_one_config(df, rsi_s, sma_cache, p) for p in param_sets]
 
+
+# ── output ─────────────────────────────────────────────────────────────────
 
 def _log_table_row(r: dict) -> None:
     if r['num_trades'] == 0:
-        logger.info('%-22s  %5d  %9s  %9s  %8s  %7s  %7s  %8s  %8s',
+        logger.info('%-26s  %5d  %9s  %9s  %8s  %7s  %7s  %8s  %8s',
                     r['label'], 0, '-', '-', '-', '-', '-', '-', '-')
         return
     sp = '+' if r['total_pnl_usdt'] >= 0 else ''
     logger.info(
-        '%-22s  %5d  %8.1f%%  %s%8.2f  %s%6.2f%%  %6.2f%%  %7.4f  %+8.2f  %+8.2f',
+        '%-26s  %5d  %8.1f%%  %s%8.2f  %s%6.2f%%  %6.2f%%  %7.4f  %+8.2f  %+8.2f',
         r['label'], r['num_trades'], r['win_rate_pct'],
         sp, r['total_pnl_usdt'], sp, r['total_pnl_pct'],
         r['max_drawdown_pct'], r['sharpe_ratio'],
@@ -348,34 +388,54 @@ def _log_comparison_table(
     data_from: str,
     data_to: str,
     candles: int,
+    title: str = 'MULTI-PARAM BACKTEST',
+    subtitle: str = '',
 ) -> None:
     ranked = sorted(results, key=lambda r: r.get('sharpe_ratio', -999), reverse=True)
-    sep = '─' * 92
-    hdr = (f"{'Config':<22}  {'#':>5}  {'WinRate':>8}  {'PnL USDT':>9}  "
+    sep = '─' * 96
+    hdr = (f"{'Config':<26}  {'#':>5}  {'WinRate':>8}  {'PnL USDT':>9}  "
            f"{'PnL%':>7}  {'MaxDD%':>6}  {'Sharpe':>7}  {'Best':>8}  {'Worst':>8}")
     logger.info(sep)
-    logger.info('MULTI-PARAM BACKTEST  %s → %s  |  %d candles', data_from, data_to, candles)
-    logger.info('SL=%.0f%%  TP=%.0f%%  Risk/trade=%.1f%%  Balance=%.0f USDT',
-                _SL_PCT * 100, _TP_PCT * 100, _RISK_PCT * 100, _BALANCE)
+    logger.info('%s  %s → %s  |  %d candles', title, data_from, data_to, candles)
+    if subtitle:
+        logger.info(subtitle)
     logger.info(sep)
     logger.info(hdr)
-    logger.info('─' * 92)
+    logger.info('─' * 96)
     for r in ranked:
         _log_table_row(r)
     logger.info(sep)
 
 
-def _save_multi_report(results: list[dict], period: dict) -> None:
+def _save_report_to(
+    results: list[dict],
+    period: dict,
+    path: Path,
+) -> None:
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ranked = sorted(results, key=lambda r: r.get('sharpe_ratio', -999), reverse=True)
     out = {
-        'period':     period,
-        'parameters': {'sl_pct': _SL_PCT, 'tp_pct': _TP_PCT,
-                       'risk_pct': _RISK_PCT, 'balance': _BALANCE},
-        'configs':    ranked,
+        'period':   period,
+        'risk_pct': _RISK_PCT,
+        'balance':  _BALANCE,
+        'configs':  ranked,
     }
-    _MULTI_FILE.write_text(json.dumps(out, indent=2))
-    logger.info('multi_report_saved path=%s', _MULTI_FILE)
+    path.write_text(json.dumps(out, indent=2))
+    logger.info('report_saved path=%s', path)
+
+
+def _report_sweep(
+    results: list[dict],
+    period: dict,
+    path: Path,
+    title: str,
+    subtitle: str,
+) -> None:
+    _save_report_to(results, period, path)
+    _log_comparison_table(
+        results, period['from'], period['to'], period['candles'],
+        title=title, subtitle=subtitle,
+    )
 
 
 # ── entry point ────────────────────────────────────────────────────────────
@@ -384,24 +444,21 @@ def run() -> None:
     logger.info('backtest_start symbol=%s timeframe=%s lookback_days=%d',
                 _SYMBOL, _TIMEFRAME, _LOOKBACK_DAYS)
     exchange = _make_exchange()
-
     logger.info('downloading %d-day data from Binance production (no auth)...', _LOOKBACK_DAYS)
     df = _fetch_historical(exchange)
-
     if len(df) < 51:
         logger.error('insufficient_data candles=%d required_minimum=51', len(df))
         return
-
-    logger.info('running %d param combinations on %d candles...', len(_PARAM_SETS), len(df))
-    results = _run_multi_analysis(df)
-
-    period = {
-        'from':    _ts_to_iso(int(df['ts'].iloc[0])),
-        'to':      _ts_to_iso(int(df['ts'].iloc[-1])),
-        'candles': len(df),
-    }
-    _save_multi_report(results, period)
-    _log_comparison_table(results, period['from'], period['to'], period['candles'])
+    period   = _make_period(df)
+    multi_sub = (f'SL={_SL_PCT*100:.0f}%  TP={_TP_PCT*100:.0f}%  '
+                 f'Risk={_RISK_PCT*100:.1f}%  Balance={_BALANCE:.0f} USDT')
+    sltp_sub  = f'RSI<40 + SMA20  |  Risk/trade={_RISK_PCT*100:.1f}%  Balance={_BALANCE:.0f} USDT'
+    logger.info('running entry-condition sweep (%d configs)...', len(_PARAM_SETS))
+    _report_sweep(_run_param_sweep(df, _PARAM_SETS), period, _MULTI_FILE,
+                  'MULTI-PARAM BACKTEST', multi_sub)
+    logger.info('running SL/TP optimisation sweep (%d configs)...', len(_SLTP_SETS))
+    _report_sweep(_run_param_sweep(df, _SLTP_SETS), period, _SLTP_FILE,
+                  'SL/TP OPTIMISATION  RSI<40 + SMA20', sltp_sub)
 
 
 if __name__ == '__main__':

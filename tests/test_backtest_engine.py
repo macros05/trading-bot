@@ -120,50 +120,50 @@ class TestProcessBarConfigEntry(unittest.TestCase):
 
     def test_opens_when_rsi_below_threshold_and_close_above_sma(self):
         # rsi=30 < 35, close=105 > sma=100 → enter
-        new_pos, _, trade = _process_bar_config(105.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0)
+        new_pos, _, trade = _process_bar_config(105.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         self.assertIsNotNone(new_pos)
         self.assertAlmostEqual(new_pos['entry_price'], 105.0)
         self.assertIsNone(trade)
 
     def test_no_entry_when_rsi_above_threshold(self):
         # rsi=40 >= 35 → no entry
-        new_pos, _, _ = _process_bar_config(105.0, 100.0, 40.0, 1000, None, _BALANCE, 35.0)
+        new_pos, _, _ = _process_bar_config(105.0, 100.0, 40.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         self.assertIsNone(new_pos)
 
     def test_no_entry_when_close_below_sma(self):
         # close=95 < sma=100 → no entry even with oversold RSI
-        new_pos, _, _ = _process_bar_config(95.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0)
+        new_pos, _, _ = _process_bar_config(95.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         self.assertIsNone(new_pos)
 
     def test_no_entry_when_both_conditions_unmet(self):
-        new_pos, _, _ = _process_bar_config(95.0, 100.0, 40.0, 1000, None, _BALANCE, 35.0)
+        new_pos, _, _ = _process_bar_config(95.0, 100.0, 40.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         self.assertIsNone(new_pos)
 
     def test_opens_when_sma_val_is_none(self):
         # sma_val=None disables SMA filter; RSI alone decides
-        new_pos, _, _ = _process_bar_config(95.0, None, 30.0, 1000, None, _BALANCE, 35.0)
+        new_pos, _, _ = _process_bar_config(95.0, None, 30.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         self.assertIsNotNone(new_pos)
 
     def test_no_entry_with_none_sma_when_rsi_above_threshold(self):
-        new_pos, _, _ = _process_bar_config(95.0, None, 40.0, 1000, None, _BALANCE, 35.0)
+        new_pos, _, _ = _process_bar_config(95.0, None, 40.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         self.assertIsNone(new_pos)
 
     def test_higher_threshold_allows_more_entries(self):
         # rsi=42 would be blocked at threshold=35 but allowed at threshold=45
         self.assertIsNone(
-            _process_bar_config(105.0, 100.0, 42.0, 0, None, _BALANCE, 35.0)[0]
+            _process_bar_config(105.0, 100.0, 42.0, 0, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)[0]
         )
         self.assertIsNotNone(
-            _process_bar_config(105.0, 100.0, 42.0, 0, None, _BALANCE, 45.0)[0]
+            _process_bar_config(105.0, 100.0, 42.0, 0, None, _BALANCE, 45.0, _SL_PCT, _TP_PCT)[0]
         )
 
     def test_qty_equals_risk_fraction_of_balance_divided_by_close(self):
-        new_pos, _, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0)
+        new_pos, _, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         expected_qty = (_BALANCE * 0.01) / 100.0   # _RISK_PCT = 0.01
         self.assertAlmostEqual(new_pos['qty'], expected_qty, places=6)
 
     def test_balance_is_unchanged_on_entry(self):
-        _, balance, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0)
+        _, balance, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
         self.assertAlmostEqual(balance, _BALANCE)
 
 
@@ -177,7 +177,7 @@ class TestProcessBarConfigExit(unittest.TestCase):
         pos = _position(entry=100.0, qty=1.0)
         with patch('backtest.engine.check_exit', return_value='take_profit'):
             new_pos, _, trade = _process_bar_config(
-                103.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0,
+                103.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0, _SL_PCT, _TP_PCT,
             )
         self.assertIsNone(new_pos)
         self.assertIsNotNone(trade)
@@ -187,7 +187,7 @@ class TestProcessBarConfigExit(unittest.TestCase):
         pos = _position(entry=100.0, qty=1.0)
         with patch('backtest.engine.check_exit', return_value='stop_loss'):
             new_pos, _, trade = _process_bar_config(
-                98.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0,
+                98.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0, _SL_PCT, _TP_PCT,
             )
         self.assertIsNone(new_pos)
         self.assertIsNotNone(trade)
@@ -197,7 +197,7 @@ class TestProcessBarConfigExit(unittest.TestCase):
         pos = _position(entry=100.0, qty=1.0)
         with patch('backtest.engine.check_exit', return_value=None):
             new_pos, _, trade = _process_bar_config(
-                101.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0,
+                101.0, 100.0, 50.0, 1000, pos, _BALANCE, 35.0, _SL_PCT, _TP_PCT,
             )
         self.assertIs(new_pos, pos)
         self.assertIsNone(trade)
@@ -206,7 +206,7 @@ class TestProcessBarConfigExit(unittest.TestCase):
         pos = _position(entry=100.0, qty=1.0)
         with patch('backtest.engine.check_exit', return_value='take_profit'):
             _, new_balance, _ = _process_bar_config(
-                103.0, None, 50.0, 1000, pos, 10_000.0, 35.0,
+                103.0, None, 50.0, 1000, pos, 10_000.0, 35.0, _SL_PCT, _TP_PCT,
             )
         self.assertGreater(new_balance, 10_000.0)
 
@@ -221,7 +221,7 @@ class TestSimulateConfig(unittest.TestCase):
         """rsi < 0.0 is never true — no entries should fire."""
         df    = _make_df(100)
         rsi_s = rsi(df, 14)
-        trades, equity = _simulate_config(df, rsi_s, None, 0.0, 14)
+        trades, equity = _simulate_config(df, rsi_s, None, 0.0, 14, _SL_PCT, _TP_PCT)
         self.assertEqual(len(trades), 0)
         self.assertEqual(equity, [_BALANCE])
 
@@ -231,7 +231,7 @@ class TestSimulateConfig(unittest.TestCase):
         rsi_s = rsi(df, 14)
         exit_seq = iter(['take_profit'] + [None] * 500)
         with patch('backtest.engine.check_exit', side_effect=lambda *_: next(exit_seq)):
-            trades, equity = _simulate_config(df, rsi_s, None, 60.0, 14)
+            trades, equity = _simulate_config(df, rsi_s, None, 60.0, 14, _SL_PCT, _TP_PCT)
         self.assertEqual(len(trades), 1)
         self.assertEqual(len(equity), 2)    # initial + post-close
 
@@ -241,7 +241,7 @@ class TestSimulateConfig(unittest.TestCase):
         exit_seq = iter(['take_profit'] + [None] * 500)
         with patch('backtest.engine.check_exit', side_effect=lambda *_: next(exit_seq)), \
              patch('backtest.engine.calc_pnl', return_value=(50.0, 5.0)):
-            _, equity = _simulate_config(df, rsi_s, None, 60.0, 14)
+            _, equity = _simulate_config(df, rsi_s, None, 60.0, 14, _SL_PCT, _TP_PCT)
         self.assertAlmostEqual(equity[-1], _BALANCE + 50.0, places=4)
 
     def test_sma_filter_blocks_entry_when_close_below_sma(self):
@@ -250,7 +250,7 @@ class TestSimulateConfig(unittest.TestCase):
         rsi_s = rsi(df, 14)
         # Build an artificially high SMA series (all values = 200)
         high_sma = pd.Series([200.0] * len(df), index=df.index)
-        trades, equity = _simulate_config(df, rsi_s, high_sma, 60.0, 14)
+        trades, equity = _simulate_config(df, rsi_s, high_sma, 60.0, 14, _SL_PCT, _TP_PCT)
         self.assertEqual(len(trades), 0)
 
     def test_respects_min_candles_offset(self):
@@ -258,7 +258,7 @@ class TestSimulateConfig(unittest.TestCase):
         df    = _make_df(20)          # exactly 20 candles
         rsi_s = rsi(df, 14)
         # min_candles=19 → only bar 19 is processed; with threshold=0 no entry fires
-        trades, _ = _simulate_config(df, rsi_s, None, 0.0, 19)
+        trades, _ = _simulate_config(df, rsi_s, None, 0.0, 19, _SL_PCT, _TP_PCT)
         self.assertEqual(len(trades), 0)
 
 
