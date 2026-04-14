@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from core.loop import trading_loop
+from core.macro_filter import AGGRESSIVE, NORMAL, NO_TRADE
 from core.state import BotState
 from data.candles import CandleBuffer
 
@@ -74,13 +75,29 @@ def _mock_risk(
     return rm
 
 
-async def _run_one_tick(client, buffer, state_manager, risk_manager, config=None):
+def _mock_macro_filter(mode: str = NORMAL) -> MagicMock:
+    mf = MagicMock()
+    mf.get_mode = AsyncMock(return_value=mode)
+    return mf
+
+
+async def _run_one_tick(
+    client,
+    buffer,
+    state_manager,
+    risk_manager,
+    config=None,
+    macro_filter=None,
+):
     """Run the loop for exactly one iteration (sleep raises CancelledError)."""
     cfg = config or _config()
     with patch('core.loop.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
         mock_sleep.side_effect = asyncio.CancelledError
         with unittest.TestCase().assertRaises(asyncio.CancelledError):
-            await trading_loop(client, buffer, state_manager, risk_manager, cfg)
+            await trading_loop(
+                client, buffer, state_manager, risk_manager, cfg,
+                macro_filter=macro_filter,
+            )
     return mock_sleep
 
 
@@ -331,6 +348,61 @@ class TestMisc(unittest.IsolatedAsyncioTestCase):
             _mock_client(_candles(25)), CandleBuffer(), _mock_state(), _mock_risk(),
         )
         mock_sleep.assert_awaited_once_with(60)
+
+
+# ---------------------------------------------------------------------------
+# MacroFilter gate in loop
+# ---------------------------------------------------------------------------
+
+class TestMacroFilterGate(unittest.IsolatedAsyncioTestCase):
+
+    async def test_no_trade_skips_fetch(self):
+        """When macro mode is NO_TRADE, fetch_candles must not be called."""
+        client = _mock_client(_candles(25))
+        await _run_one_tick(
+            client, CandleBuffer(), _mock_state(), _mock_risk(),
+            macro_filter=_mock_macro_filter(NO_TRADE),
+        )
+        client.fetch_candles.assert_not_called()
+
+    async def test_no_trade_sleeps_interval(self):
+        mock_sleep = await _run_one_tick(
+            _mock_client([]), CandleBuffer(), _mock_state(), _mock_risk(),
+            macro_filter=_mock_macro_filter(NO_TRADE),
+        )
+        mock_sleep.assert_awaited_once_with(60)
+
+    async def test_normal_mode_proceeds_to_fetch(self):
+        """NORMAL macro mode must not suppress candle fetching."""
+        client = _mock_client(_candles(25))
+        await _run_one_tick(
+            client, CandleBuffer(), _mock_state(), _mock_risk(),
+            macro_filter=_mock_macro_filter(NORMAL),
+        )
+        client.fetch_candles.assert_called_once()
+
+    async def test_aggressive_mode_proceeds_to_fetch(self):
+        """AGGRESSIVE macro mode must not suppress candle fetching."""
+        client = _mock_client(_candles(25))
+        await _run_one_tick(
+            client, CandleBuffer(), _mock_state(), _mock_risk(),
+            macro_filter=_mock_macro_filter(AGGRESSIVE),
+        )
+        client.fetch_candles.assert_called_once()
+
+    async def test_no_macro_filter_proceeds_normally(self):
+        """When macro_filter=None (default), loop proceeds without it."""
+        client = _mock_client(_candles(25))
+        await _run_one_tick(client, CandleBuffer(), _mock_state(), _mock_risk())
+        client.fetch_candles.assert_called_once()
+
+    async def test_get_mode_called_once_per_tick(self):
+        mf = _mock_macro_filter(NORMAL)
+        await _run_one_tick(
+            _mock_client(_candles(25)), CandleBuffer(), _mock_state(), _mock_risk(),
+            macro_filter=mf,
+        )
+        mf.get_mode.assert_awaited_once()
 
 
 if __name__ == '__main__':

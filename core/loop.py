@@ -7,6 +7,7 @@ from typing import Any
 
 import ccxt
 
+from core.macro_filter import MacroFilter, NO_TRADE
 from core.state import BotState, StateManager
 from data.candles import CandleBuffer
 from exchange.client import BinanceClient
@@ -100,6 +101,7 @@ async def trading_loop(
     state_manager: StateManager,
     risk_manager: RiskManager,
     config: dict[str, Any],
+    macro_filter: MacroFilter | None = None,
 ) -> None:
     """Main trading loop. Runs indefinitely until cancelled.
 
@@ -135,6 +137,13 @@ async def trading_loop(
             )
             await asyncio.sleep(interval)
             continue
+
+        if macro_filter is not None:
+            mode = await macro_filter.get_mode()
+            if mode == NO_TRADE:
+                logger.info('macro_mode=NO_TRADE skipping_signal_evaluation')
+                await asyncio.sleep(interval)
+                continue
 
         try:
             candles: list[dict[str, Any]] = await client.fetch_candles(
