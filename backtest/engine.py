@@ -48,6 +48,8 @@ _RESULTS_DIR   = Path(__file__).parent / 'results'
 _REPORT_FILE   = _RESULTS_DIR / 'report.json'         # kept for tests
 _MULTI_FILE    = _RESULTS_DIR / 'multi_report.json'
 _SLTP_FILE     = _RESULTS_DIR / 'sltp_report.json'
+_SYMBOL_FILE   = _RESULTS_DIR / 'symbol_report.json'
+_SYMBOLS       = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
 
 
 # ── parameter set ──────────────────────────────────────────────────────────
@@ -83,6 +85,10 @@ _SLTP_SETS: list[ParamSet] = [
     ParamSet('SL2.5% / TP4.0%',        40.0, 20, 0.025, 0.040),
 ]
 
+# ── sweep 3: multi-symbol with winning config ──────────────────────────────
+
+_WINNER = ParamSet('SL2.5% / TP4.0%  RSI<40 SMA20', 40.0, 20, 0.025, 0.040)
+
 
 # ── exchange ───────────────────────────────────────────────────────────────
 
@@ -104,7 +110,10 @@ def _to_dataframe(rows: list[list]) -> pd.DataFrame:
     return df
 
 
-def _fetch_historical(exchange: ccxt.binance) -> pd.DataFrame:
+def _fetch_historical(
+    exchange: ccxt.binance,
+    symbol: str = _SYMBOL,
+) -> pd.DataFrame:
     now_ms   = int(time.time() * 1000)
     since_ms = now_ms - _LOOKBACK_DAYS * 24 * 60 * 60 * 1000
     rows: list[list] = []
@@ -112,19 +121,19 @@ def _fetch_historical(exchange: ccxt.binance) -> pd.DataFrame:
     pages    = 0
 
     while current < now_ms:
-        page = exchange.fetch_ohlcv(_SYMBOL, _TIMEFRAME, since=current, limit=_PAGE_SIZE)
+        page = exchange.fetch_ohlcv(symbol, _TIMEFRAME, since=current, limit=_PAGE_SIZE)
         if not page:
             break
         rows.extend(page)
         pages   += 1
         current  = page[-1][0] + 60_000
         if pages % 10 == 0:
-            logger.info('fetching pages=%d candles=%d', pages, len(rows))
+            logger.info('fetching symbol=%s pages=%d candles=%d', symbol, pages, len(rows))
         if len(page) < _PAGE_SIZE:
             break
         time.sleep(0.25)
 
-    logger.info('fetch_complete pages=%d total_candles=%d', pages, len(rows))
+    logger.info('fetch_complete symbol=%s pages=%d total_candles=%d', symbol, pages, len(rows))
     return _to_dataframe(rows)
 
 
@@ -438,6 +447,83 @@ def _report_sweep(
     )
 
 
+# ── multi-symbol functions ─────────────────────────────────────────────────
+
+def _run_symbol(exchange: ccxt.binance, symbol: str) -> tuple[dict, dict]:
+    """Fetch 90-day data for symbol, run _WINNER config, return (result, period)."""
+    df     = _fetch_historical(exchange, symbol)
+    period = _make_period(df)
+    rsi_s  = rsi(df, _RSI_PERIOD)
+    sma_c  = _precompute_sma_cache(df, [_WINNER])
+    result = _run_one_config(df, rsi_s, sma_c, _WINNER)
+    result['symbol'] = symbol
+    return result, period
+
+
+def _combined_result(per_symbol: list[dict]) -> dict:
+    """Merge all per-symbol trades into aggregate metrics."""
+    all_trades: list[dict] = []
+    for r in per_symbol:
+        all_trades.extend(r.get('trades', []))
+    base: dict = {'num_trades': len(all_trades), 'sharpe_ratio': 0.0}
+    if not all_trades:
+        return base
+    all_trades.sort(key=lambda t: t['entry_ts'])
+    balance = _BALANCE * len(per_symbol)
+    equity  = [balance]
+    for t in all_trades:
+        balance += t['pnl_usdt']
+        equity.append(balance)
+    base.update(_trade_metrics(all_trades, equity))
+    return base
+
+
+def _log_symbol_table(
+    per_symbol: list[dict],
+    combined: dict,
+    data_from: str,
+    data_to: str,
+) -> None:
+    sep = '─' * 96
+    hdr = (f"{'Symbol':<26}  {'#':>5}  {'WinRate':>8}  {'PnL USDT':>9}  "
+           f"{'PnL%':>7}  {'MaxDD%':>6}  {'Sharpe':>7}  {'Best':>8}  {'Worst':>8}")
+    logger.info(sep)
+    logger.info('MULTI-SYMBOL BACKTEST  config: %s  |  %s → %s', _WINNER.label, data_from, data_to)
+    logger.info(sep)
+    logger.info(hdr)
+    logger.info('─' * 96)
+    for r in per_symbol:
+        _log_table_row(r)
+    logger.info('─' * 96)
+    _log_table_row(combined)
+    logger.info(sep)
+
+
+def _run_multi_symbol(exchange: ccxt.binance) -> None:
+    per_symbol: list[dict] = []
+    periods:    list[dict] = []
+    for sym in _SYMBOLS:
+        result, period = _run_symbol(exchange, sym)
+        result['label'] = sym
+        per_symbol.append(result)
+        periods.append(period)
+    combined         = _combined_result(per_symbol)
+    combined['label'] = 'COMBINED'
+    data_from = min(p['from'] for p in periods)
+    data_to   = max(p['to']   for p in periods)
+    _log_symbol_table(per_symbol, combined, data_from, data_to)
+    _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    out = {
+        'config':   {'rsi_threshold': _WINNER.rsi_threshold, 'sma_period': _WINNER.sma_period,
+                     'sl_pct': _WINNER.sl_pct, 'tp_pct': _WINNER.tp_pct},
+        'symbols':  [{'symbol': r['symbol'], 'period': p, 'result': r}
+                     for r, p in zip(per_symbol, periods)],
+        'combined': combined,
+    }
+    _SYMBOL_FILE.write_text(json.dumps(out, indent=2))
+    logger.info('report_saved path=%s', _SYMBOL_FILE)
+
+
 # ── entry point ────────────────────────────────────────────────────────────
 
 def run() -> None:
@@ -459,6 +545,8 @@ def run() -> None:
     logger.info('running SL/TP optimisation sweep (%d configs)...', len(_SLTP_SETS))
     _report_sweep(_run_param_sweep(df, _SLTP_SETS), period, _SLTP_FILE,
                   'SL/TP OPTIMISATION  RSI<40 + SMA20', sltp_sub)
+    logger.info('running multi-symbol analysis (%s)...', ', '.join(_SYMBOLS))
+    _run_multi_symbol(exchange)
 
 
 if __name__ == '__main__':

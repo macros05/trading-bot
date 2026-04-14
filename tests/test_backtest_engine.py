@@ -18,6 +18,7 @@ import pandas as pd
 
 from backtest.engine import (
     _close_position,
+    _combined_result,
     _compute_metrics,
     _max_drawdown,
     _process_bar_config,
@@ -29,7 +30,9 @@ from backtest.engine import (
     _BALANCE,
     _RSI_PERIOD,
     _SL_PCT,
+    _SYMBOLS,
     _TP_PCT,
+    _WINNER,
 )
 from strategy.indicators import rsi, sma
 
@@ -362,6 +365,73 @@ class TestComputeMetrics(unittest.TestCase):
         report = _compute_metrics(trades, [_BALANCE, _BALANCE + 10.0], df)
         self.assertIn('trades', report)
         self.assertEqual(len(report['trades']), 1)
+
+
+# ---------------------------------------------------------------------------
+# _combined_result
+# ---------------------------------------------------------------------------
+
+def _make_sym_result(pnl_usdt: float, pnl_pct: float, result: str, ts: int = 0) -> dict:
+    trade = {'pnl_usdt': pnl_usdt, 'pnl_pct': pnl_pct, 'result': result,
+             'entry_ts': ts, 'exit_ts': ts + 60_000,
+             'entry_price': 100.0, 'exit_price': 100.0 + pnl_usdt, 'qty': 1.0,
+             'reason': 'take_profit' if pnl_usdt > 0 else 'stop_loss'}
+    return {'num_trades': 1, 'trades': [trade]}
+
+
+class TestCombinedResult(unittest.TestCase):
+
+    def test_zero_trades_when_no_symbols_have_trades(self):
+        result = _combined_result([{'num_trades': 0}, {'num_trades': 0}])
+        self.assertEqual(result['num_trades'], 0)
+        self.assertEqual(result['sharpe_ratio'], 0.0)
+
+    def test_aggregates_trade_count_from_all_symbols(self):
+        r1 = _make_sym_result(10.0,  1.0, 'WIN',  ts=1000)
+        r2 = _make_sym_result(-5.0, -0.5, 'LOSS', ts=2000)
+        result = _combined_result([r1, r2])
+        self.assertEqual(result['num_trades'], 2)
+
+    def test_combined_pnl_is_sum_across_symbols(self):
+        r1 = _make_sym_result(10.0, 1.0, 'WIN',  ts=1000)
+        r2 = _make_sym_result(-5.0, -0.5, 'LOSS', ts=2000)
+        result = _combined_result([r1, r2])
+        self.assertAlmostEqual(result['total_pnl_usdt'], 5.0, places=4)
+
+    def test_combined_win_rate_counts_across_symbols(self):
+        r1 = _make_sym_result(10.0, 1.0, 'WIN',  ts=1000)
+        r2 = _make_sym_result(8.0,  0.8, 'WIN',  ts=2000)
+        r3 = _make_sym_result(-5.0, -0.5, 'LOSS', ts=3000)
+        result = _combined_result([r1, r2, r3])
+        self.assertAlmostEqual(result['win_rate_pct'], 200.0 / 3, places=1)
+
+    def test_starting_balance_scaled_by_num_symbols(self):
+        """Combined equity starts at _BALANCE × n_symbols."""
+        r1 = _make_sym_result(0.0, 0.0, 'WIN', ts=1000)
+        r1['trades'][0]['result'] = 'WIN'
+        r2 = _make_sym_result(0.0, 0.0, 'WIN', ts=2000)
+        # With 2 symbols, starting equity = _BALANCE * 2; a zero-PnL trade leaves it unchanged
+        result = _combined_result([r1, r2])
+        self.assertAlmostEqual(result['total_pnl_usdt'], 0.0, places=4)
+
+
+# ---------------------------------------------------------------------------
+# _WINNER / _SYMBOLS sanity
+# ---------------------------------------------------------------------------
+
+class TestWinnerConstant(unittest.TestCase):
+
+    def test_winner_matches_best_sltp_config(self):
+        self.assertAlmostEqual(_WINNER.sl_pct, 0.025)
+        self.assertAlmostEqual(_WINNER.tp_pct, 0.040)
+        self.assertAlmostEqual(_WINNER.rsi_threshold, 40.0)
+        self.assertEqual(_WINNER.sma_period, 20)
+
+    def test_symbols_contains_three_pairs(self):
+        self.assertEqual(len(_SYMBOLS), 3)
+        self.assertIn('BTC/USDT', _SYMBOLS)
+        self.assertIn('ETH/USDT', _SYMBOLS)
+        self.assertIn('SOL/USDT', _SYMBOLS)
 
 
 if __name__ == '__main__':
