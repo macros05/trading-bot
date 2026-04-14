@@ -35,3 +35,9 @@ def calc_pnl(
     pnl_usdt = (close - entry_price) * qty
     pnl_pct  = (close - entry_price) / entry_price * 100
     return pnl_usdt, pnl_pct
+
+
+def should_enter_mean_rev(drop_pct: float, threshold: float = 0.015) -> bool:
+    """Return True when pct_change(lookback) crossed below -threshold.
+    drop_pct is the precomputed fractional change (negative = price fell)."""
+    return drop_pct <= -threshold

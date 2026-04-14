@@ -24,10 +24,12 @@ from backtest.engine import (
     _process_bar_config,
     _sharpe,
     _simulate_config,
+    _simulate_mean_rev,
     _to_dataframe,
     _trade_metrics,
     _ts_to_iso,
     _BALANCE,
+    _MEAN_REV,
     _RSI_PERIOD,
     _SL_PCT,
     _SYMBOLS,
@@ -365,6 +367,52 @@ class TestComputeMetrics(unittest.TestCase):
         report = _compute_metrics(trades, [_BALANCE, _BALANCE + 10.0], df)
         self.assertIn('trades', report)
         self.assertEqual(len(report['trades']), 1)
+
+
+# ---------------------------------------------------------------------------
+# _simulate_mean_rev
+# ---------------------------------------------------------------------------
+
+class TestSimulateMeanRev(unittest.TestCase):
+
+    def test_no_trades_when_price_never_drops_enough(self):
+        """Flat price → pct_change ≈ 0, never crosses -1.5% threshold."""
+        df     = _make_df(100, close=100.0)
+        trades, equity = _simulate_mean_rev(df, _MEAN_REV)
+        self.assertEqual(len(trades), 0)
+        self.assertEqual(equity, [_BALANCE])
+
+    def test_entry_fires_on_sharp_drop(self):
+        """Inject a 2% drop in 10 bars then check exit fires → one trade."""
+        rows = []
+        for i in range(20):
+            price = 100.0 if i < 10 else 98.0   # 2% drop at bar 10
+            rows.append([i * 60_000, price - 0.1, price + 0.1, price - 0.2, price, 10.0])
+        df = _to_dataframe(rows)
+        exit_seq = iter(['take_profit'] + [None] * 500)
+        with patch('backtest.engine.check_exit', side_effect=lambda *_: next(exit_seq)):
+            trades, equity = _simulate_mean_rev(df, _MEAN_REV)
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(len(equity), 2)
+
+    def test_balance_decreases_on_stop_loss(self):
+        rows = []
+        for i in range(20):
+            # bars 0-9: 100.0 (lookback baseline)
+            # bar 10: 98.0 (2% drop → entry at 98.0)
+            # bars 11+: 96.9 (> 1% below entry → real stop_loss triggers)
+            price = 100.0 if i < 10 else (98.0 if i == 10 else 96.9)
+            rows.append([i * 60_000, price - 0.1, price + 0.1, price - 0.2, price, 10.0])
+        df = _to_dataframe(rows)
+        _, equity = _simulate_mean_rev(df, _MEAN_REV)
+        self.assertLess(equity[-1], _BALANCE)
+
+    def test_mean_rev_config_has_correct_params(self):
+        self.assertEqual(_MEAN_REV.strategy,  'mean_rev')
+        self.assertAlmostEqual(_MEAN_REV.drop_pct, 0.015)
+        self.assertEqual(_MEAN_REV.lookback,   10)
+        self.assertAlmostEqual(_MEAN_REV.sl_pct, 0.01)
+        self.assertAlmostEqual(_MEAN_REV.tp_pct, 0.01)
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from strategy.signals import calc_pnl, check_exit, should_enter
+from strategy.signals import calc_pnl, check_exit, should_enter, should_enter_mean_rev
 
 
 # ---------------------------------------------------------------------------
@@ -118,6 +118,33 @@ class TestCalcPnl(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertIsInstance(result[0], float)
         self.assertIsInstance(result[1], float)
+
+
+# ---------------------------------------------------------------------------
+# should_enter_mean_rev
+# ---------------------------------------------------------------------------
+
+class TestShouldEnterMeanRev(unittest.TestCase):
+
+    def test_returns_true_when_drop_exceeds_threshold(self):
+        self.assertTrue(should_enter_mean_rev(-0.02, threshold=0.015))
+
+    def test_returns_false_when_drop_below_threshold(self):
+        self.assertFalse(should_enter_mean_rev(-0.01, threshold=0.015))
+
+    def test_boundary_equal_to_threshold_returns_true(self):
+        # drop == -threshold triggers (<=)
+        self.assertTrue(should_enter_mean_rev(-0.015, threshold=0.015))
+
+    def test_returns_false_when_price_rose(self):
+        self.assertFalse(should_enter_mean_rev(0.02, threshold=0.015))
+
+    def test_returns_false_on_zero_change(self):
+        self.assertFalse(should_enter_mean_rev(0.0, threshold=0.015))
+
+    def test_custom_threshold_respected(self):
+        self.assertTrue(should_enter_mean_rev(-0.03, threshold=0.025))
+        self.assertFalse(should_enter_mean_rev(-0.02, threshold=0.025))
 
 
 if __name__ == '__main__':

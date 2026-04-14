@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import BOT_CONFIG
 from strategy.indicators import rsi, sma
-from strategy.signals import calc_pnl, check_exit
+from strategy.signals import calc_pnl, check_exit, should_enter_mean_rev
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,8 +48,9 @@ _RESULTS_DIR   = Path(__file__).parent / 'results'
 _REPORT_FILE   = _RESULTS_DIR / 'report.json'         # kept for tests
 _MULTI_FILE    = _RESULTS_DIR / 'multi_report.json'
 _SLTP_FILE     = _RESULTS_DIR / 'sltp_report.json'
-_SYMBOL_FILE   = _RESULTS_DIR / 'symbol_report.json'
-_SYMBOLS       = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
+_SYMBOL_FILE        = _RESULTS_DIR / 'symbol_report.json'
+_STRATEGY_COMP_FILE = _RESULTS_DIR / 'strategy_comp_report.json'
+_SYMBOLS            = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
 
 
 # ── parameter set ──────────────────────────────────────────────────────────
@@ -61,6 +62,9 @@ class ParamSet:
     sma_period:    int | None   # None = no SMA filter
     sl_pct:        float = field(default=0.02)
     tp_pct:        float = field(default=0.03)
+    strategy:      str   = field(default='rsi_sma')  # 'rsi_sma' | 'mean_rev'
+    drop_pct:      float = field(default=0.015)       # mean_rev: entry drop threshold
+    lookback:      int   = field(default=10)          # mean_rev: bars to measure drop
 
 
 # ── sweep 1: entry-condition combinations (SL/TP fixed from config) ────────
@@ -87,7 +91,20 @@ _SLTP_SETS: list[ParamSet] = [
 
 # ── sweep 3: multi-symbol with winning config ──────────────────────────────
 
-_WINNER = ParamSet('SL2.5% / TP4.0%  RSI<40 SMA20', 40.0, 20, 0.025, 0.040)
+_WINNER   = ParamSet('SL2.5% / TP4.0%  RSI<40 SMA20', 40.0, 20, 0.025, 0.040)
+
+# ── sweep 4: mean reversion strategy ──────────────────────────────────────
+
+_MEAN_REV = ParamSet(
+    label='MeanRev drop>1.5%/10m SL1%TP1%',
+    rsi_threshold=0.0,   # unused for mean_rev strategy
+    sma_period=None,     # unused for mean_rev strategy
+    sl_pct=0.01,
+    tp_pct=0.01,
+    strategy='mean_rev',
+    drop_pct=0.015,
+    lookback=10,
+)
 
 
 # ── exchange ───────────────────────────────────────────────────────────────
@@ -220,6 +237,38 @@ def _simulate_config(
     return trades, equity
 
 
+def _simulate_mean_rev(
+    df: pd.DataFrame,
+    params: ParamSet,
+) -> tuple[list[dict], list[float]]:
+    """Simulate mean-reversion strategy: enter when price drops > drop_pct over lookback bars."""
+    drop_s    = df['close'].pct_change(params.lookback)
+    balance   = _BALANCE
+    trades:   list[dict]  = []
+    equity:   list[float] = [balance]
+    position: dict | None = None
+
+    for i in range(params.lookback, len(df)):
+        close    = float(df['close'].iloc[i])
+        drop_val = float(drop_s.iloc[i])
+        if pd.isna(drop_val):
+            continue
+        ts = int(df['ts'].iloc[i])
+        if position is None:
+            if should_enter_mean_rev(drop_val, params.drop_pct):
+                qty      = (balance * _RISK_PCT) / close
+                position = {'entry_price': close, 'qty': qty, 'entry_ts': ts}
+            continue
+        reason = check_exit(close, position['entry_price'], params.sl_pct, params.tp_pct)
+        if reason:
+            trade, balance = _close_position(position, close, ts, reason, balance)
+            trades.append(trade)
+            equity.append(balance)
+            position = None
+
+    return trades, equity
+
+
 # ── metrics ────────────────────────────────────────────────────────────────
 
 def _max_drawdown(equity: list[float]) -> float:
@@ -341,28 +390,42 @@ def _precompute_sma_cache(
     return {period: sma(df, period) for period in periods}
 
 
+def _run_simulation(
+    df: pd.DataFrame,
+    rsi_s: pd.Series,
+    sma_cache: dict[int, pd.Series],
+    params: ParamSet,
+) -> tuple[list[dict], list[float]]:
+    """Dispatch to the correct simulate function based on params.strategy."""
+    if params.strategy == 'mean_rev':
+        return _simulate_mean_rev(df, params)
+    sma_s = sma_cache.get(params.sma_period) if params.sma_period is not None else None
+    min_c = max(_RSI_PERIOD, params.sma_period or 0)
+    return _simulate_config(
+        df, rsi_s, sma_s, params.rsi_threshold, min_c, params.sl_pct, params.tp_pct,
+    )
+
+
 def _run_one_config(
     df: pd.DataFrame,
     rsi_s: pd.Series,
     sma_cache: dict[int, pd.Series],
     params: ParamSet,
 ) -> dict:
-    sma_s      = sma_cache.get(params.sma_period) if params.sma_period is not None else None
-    min_c      = max(_RSI_PERIOD, params.sma_period or 0)
-    trades, eq = _simulate_config(
-        df, rsi_s, sma_s, params.rsi_threshold, min_c, params.sl_pct, params.tp_pct,
-    )
+    trades, eq = _run_simulation(df, rsi_s, sma_cache, params)
     result: dict = {
         'label':        params.label,
-        'parameters':   {'rsi_threshold': params.rsi_threshold, 'sma_period': params.sma_period,
-                         'sl_pct': params.sl_pct, 'tp_pct': params.tp_pct},
+        'parameters':   {'strategy': params.strategy,
+                         'rsi_threshold': params.rsi_threshold, 'sma_period': params.sma_period,
+                         'sl_pct': params.sl_pct, 'tp_pct': params.tp_pct,
+                         'drop_pct': params.drop_pct, 'lookback': params.lookback},
         'num_trades':   len(trades),
         'sharpe_ratio': 0.0,
     }
     if trades:
         result.update(_trade_metrics(trades, eq))
         result['trades'] = trades
-    logger.info('config=%-26s trades=%d', params.label, len(trades))
+    logger.info('config=%-40s trades=%d', params.label, len(trades))
     return result
 
 
@@ -547,6 +610,13 @@ def run() -> None:
                   'SL/TP OPTIMISATION  RSI<40 + SMA20', sltp_sub)
     logger.info('running multi-symbol analysis (%s)...', ', '.join(_SYMBOLS))
     _run_multi_symbol(exchange)
+    logger.info('running strategy comparison: rsi_sma vs mean_rev on BTC/USDT...')
+    comp_sub = (f'RSI<40+SMA20 SL2.5%/TP4.0%  vs  MeanRev drop>1.5%/10m SL1%/TP1%  '
+                f'|  Risk={_RISK_PCT*100:.1f}%  Balance={_BALANCE:.0f} USDT')
+    _report_sweep(
+        _run_param_sweep(df, [_WINNER, _MEAN_REV]), period,
+        _STRATEGY_COMP_FILE, 'STRATEGY COMPARISON  BTC/USDT', comp_sub,
+    )
 
 
 if __name__ == '__main__':
