@@ -1,8 +1,8 @@
 {
   "period": {
-    "from": "2026-01-14T12:43:00Z",
-    "to": "2026-04-14T12:43:00Z",
-    "candles": 129601
+    "from": "2026-01-14T14:40:00Z",
+    "to": "2026-04-14T14:41:00Z",
+    "candles": 129602
   },
   "risk_pct": 0.01,
   "balance": 10000.0,
@@ -10,10 +10,13 @@
     {
       "label": "SL2.5% / TP4.0%",
       "parameters": {
+        "strategy": "rsi_sma",
         "rsi_threshold": 40.0,
         "sma_period": 20,
         "sl_pct": 0.025,
-        "tp_pct": 0.04
+        "tp_pct": 0.04,
+        "drop_pct": 0.015,
+        "lookback": 10
       },
       "num_trades": 10,
       "sharpe_ratio": 0.1873,
@@ -141,10 +144,13 @@
     {
       "label": "SL2.0% / TP3.0% (base)",
       "parameters": {
+        "strategy": "rsi_sma",
         "rsi_threshold": 40.0,
         "sma_period": 20,
         "sl_pct": 0.02,
-        "tp_pct": 0.03
+        "tp_pct": 0.03,
+        "drop_pct": 0.015,
+        "lookback": 10
       },
       "num_trades": 10,
       "sharpe_ratio": 0.1518,
@@ -272,10 +278,13 @@
     {
       "label": "SL1.5% / TP3.0%",
       "parameters": {
+        "strategy": "rsi_sma",
         "rsi_threshold": 40.0,
         "sma_period": 20,
         "sl_pct": 0.015,
-        "tp_pct": 0.03
+        "tp_pct": 0.03,
+        "drop_pct": 0.015,
+        "lookback": 10
       },
       "num_trades": 10,
       "sharpe_ratio": 0.1148,
@@ -403,10 +412,13 @@
     {
       "label": "SL2.0% / TP4.0%",
       "parameters": {
+        "strategy": "rsi_sma",
         "rsi_threshold": 40.0,
         "sma_period": 20,
         "sl_pct": 0.02,
-        "tp_pct": 0.04
+        "tp_pct": 0.04,
+        "drop_pct": 0.015,
+        "lookback": 10
       },
       "num_trades": 10,
       "sharpe_ratio": 0.1008,
@@ -534,10 +546,13 @@
     {
       "label": "SL1.5% / TP2.5%",
       "parameters": {
+        "strategy": "rsi_sma",
         "rsi_threshold": 40.0,
         "sma_period": 20,
         "sl_pct": 0.015,
-        "tp_pct": 0.025
+        "tp_pct": 0.025,
+        "drop_pct": 0.015,
+        "lookback": 10
       },
       "num_trades": 10,
       "sharpe_ratio": 0.0716,
@@ -665,10 +680,13 @@
     {
       "label": "SL2.0% / TP3.5%",
       "parameters": {
+        "strategy": "rsi_sma",
         "rsi_threshold": 40.0,
         "sma_period": 20,
         "sl_pct": 0.02,
-        "tp_pct": 0.035
+        "tp_pct": 0.035,
+        "drop_pct": 0.015,
+        "lookback": 10
       },
       "num_trades": 10,
       "sharpe_ratio": 0.0658,

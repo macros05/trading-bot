@@ -9,8 +9,8 @@
     {
       "symbol": "BTC/USDT",
       "period": {
-        "from": "2026-01-14T13:27:00Z",
-        "to": "2026-04-14T13:27:00Z",
+        "from": "2026-01-14T14:42:00Z",
+        "to": "2026-04-14T14:42:00Z",
         "candles": 129601
       },
       "result": {
@@ -152,9 +152,9 @@
     {
       "symbol": "ETH/USDT",
       "period": {
-        "from": "2026-01-14T13:28:00Z",
-        "to": "2026-04-14T13:28:00Z",
-        "candles": 129601
+        "from": "2026-01-14T14:43:00Z",
+        "to": "2026-04-14T14:44:00Z",
+        "candles": 129602
       },
       "result": {
         "label": "ETH/USDT",
@@ -361,9 +361,9 @@
     {
       "symbol": "SOL/USDT",
       "period": {
-        "from": "2026-01-14T13:29:00Z",
-        "to": "2026-04-14T13:30:00Z",
-        "candles": 129602
+        "from": "2026-01-14T14:45:00Z",
+        "to": "2026-04-14T14:45:00Z",
+        "candles": 129601
       },
       "result": {
         "label": "SOL/USDT",
@@ -376,33 +376,22 @@
           "drop_pct": 0.015,
           "lookback": 10
         },
-        "num_trades": 13,
-        "sharpe_ratio": -0.3762,
-        "total_pnl_usdt": -14.7578,
-        "total_pnl_pct": -0.1476,
+        "num_trades": 12,
+        "sharpe_ratio": -0.3235,
+        "total_pnl_usdt": -12.0927,
+        "total_pnl_pct": -0.1209,
         "num_wins": 3,
-        "num_losses": 10,
-        "win_rate_pct": 23.08,
-        "max_drawdown_pct": 0.2313,
-        "best_trade_usdt": 4.1997,
-        "worst_trade_usdt": -3.2284,
+        "num_losses": 9,
+        "win_rate_pct": 25.0,
+        "max_drawdown_pct": 0.2047,
+        "best_trade_usdt": 4.2009,
+        "worst_trade_usdt": -3.2292,
         "trades": [
-          {
-            "entry_price": 144.29,
-            "exit_price": 140.44,
-            "qty": 0.6930487213251092,
-            "pnl_usdt": -2.668238,
-            "pnl_pct": -2.668238,
-            "result": "LOSS",
-            "reason": "stop_loss",
-            "entry_ts": 1768399260000,
-            "exit_ts": 1768578420000
-          },
           {
             "entry_price": 142.51,
             "exit_price": 138.43,
-            "qty": 0.701517911895509,
-            "pnl_usdt": -2.862193,
+            "qty": 0.7017051434987019,
+            "pnl_usdt": -2.862957,
             "pnl_pct": -2.862957,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -412,8 +401,8 @@
           {
             "entry_price": 129.5,
             "exit_price": 125.89,
-            "qty": 0.7717737119183293,
-            "pnl_usdt": -2.786103,
+            "qty": 0.7719796944412761,
+            "pnl_usdt": -2.786847,
             "pnl_pct": -2.787645,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -423,8 +412,8 @@
           {
             "entry_price": 124.51,
             "exit_price": 121.34,
-            "qty": 0.8024804004692266,
-            "pnl_usdt": -2.543863,
+            "qty": 0.802694578452943,
+            "pnl_usdt": -2.544542,
             "pnl_pct": -2.54598,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -434,8 +423,8 @@
           {
             "entry_price": 85.53,
             "exit_price": 83.33,
-            "qty": 1.1679106282442246,
-            "pnl_usdt": -2.569403,
+            "qty": 1.1682223377182155,
+            "pnl_usdt": -2.570089,
             "pnl_pct": -2.572197,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -445,8 +434,8 @@
           {
             "entry_price": 87.53,
             "exit_price": 85.31,
-            "qty": 1.1409311321821907,
-            "pnl_usdt": -2.532867,
+            "qty": 1.1412356409643456,
+            "pnl_usdt": -2.533543,
             "pnl_pct": -2.536273,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -456,8 +445,8 @@
           {
             "entry_price": 84.13,
             "exit_price": 81.83,
-            "qty": 1.1867392526895604,
-            "pnl_usdt": -2.7295,
+            "qty": 1.1870559874287385,
+            "pnl_usdt": -2.730229,
             "pnl_pct": -2.733864,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -467,8 +456,8 @@
           {
             "entry_price": 83.05,
             "exit_price": 80.86,
-            "qty": 1.2018432068147002,
-            "pnl_usdt": -2.632037,
+            "qty": 1.202163972723286,
+            "pnl_usdt": -2.632739,
             "pnl_pct": -2.636966,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -478,8 +467,8 @@
           {
             "entry_price": 88.0,
             "exit_price": 91.57,
-            "qty": 1.1339404313605863,
-            "pnl_usdt": 4.048167,
+            "qty": 1.134243074359844,
+            "pnl_usdt": 4.049248,
             "pnl_pct": 4.056818,
             "result": "WIN",
             "reason": "take_profit",
@@ -489,8 +478,8 @@
           {
             "entry_price": 90.06,
             "exit_price": 87.69,
-            "qty": 1.108452583090508,
-            "pnl_usdt": -2.627033,
+            "qty": 1.1087484235112248,
+            "pnl_usdt": -2.627734,
             "pnl_pct": -2.631579,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -500,8 +489,8 @@
           {
             "entry_price": 85.94,
             "exit_price": 83.16,
-            "qty": 1.1612865872342557,
-            "pnl_usdt": -3.228377,
+            "qty": 1.1615965287850094,
+            "pnl_usdt": -3.229238,
             "pnl_pct": -3.234815,
             "result": "LOSS",
             "reason": "stop_loss",
@@ -511,8 +500,8 @@
           {
             "entry_price": 80.77,
             "exit_price": 84.17,
-            "qty": 1.2352195807823056,
-            "pnl_usdt": 4.199747,
+            "qty": 1.2355492546772746,
+            "pnl_usdt": 4.200867,
             "pnl_pct": 4.209484,
             "result": "WIN",
             "reason": "take_profit",
@@ -522,8 +511,8 @@
           {
             "entry_price": 82.26,
             "exit_price": 85.7,
-            "qty": 1.2133562242345417,
-            "pnl_usdt": 4.173945,
+            "qty": 1.2136800629095854,
+            "pnl_usdt": 4.175059,
             "pnl_pct": 4.181862,
             "result": "WIN",
             "reason": "take_profit",
@@ -536,16 +525,16 @@
     }
   ],
   "combined": {
-    "num_trades": 39,
-    "sharpe_ratio": -0.1387,
-    "total_pnl_usdt": -17.7214,
-    "total_pnl_pct": -0.1772,
+    "num_trades": 38,
+    "sharpe_ratio": -0.12,
+    "total_pnl_usdt": -15.0564,
+    "total_pnl_pct": -0.1506,
     "num_wins": 13,
-    "num_losses": 26,
-    "win_rate_pct": 33.33,
-    "max_drawdown_pct": 0.1644,
-    "best_trade_usdt": 4.1997,
-    "worst_trade_usdt": -3.2284,
+    "num_losses": 25,
+    "win_rate_pct": 34.21,
+    "max_drawdown_pct": 0.1556,
+    "best_trade_usdt": 4.2009,
+    "worst_trade_usdt": -3.2292,
     "label": "COMBINED"
   }
 }
