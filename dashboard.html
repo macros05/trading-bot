@@ -352,8 +352,8 @@ const POLL_MS      = 5000;
 const STALE_MS     = 2 * 60 * 1000;   // 2 minutes
 
 // ── regex ──────────────────────────────────────────────────────────────────
-const RE_TICK        = /tick\s+symbol=(\S+)\s+close=([\d.]+)\s+sma\d+=([.\d]+)\s+rsi\d+=([\d.]+)\s+state=(\S+)/;
-const RE_SIGNAL      = /buy_signal\s+symbol=(\S+)\s+close=([\d.]+)\s+sma\d+=[.\d]+\s+rsi\d+=([\d.]+)/;
+const RE_TICK        = /tick\s+symbol=(\S+)\s+close=([\d.]+)\s+sma\d+=([.\d]+)\s+rsi\d+=([\d.]+)(?:\s+vol_ratio=[.\d]+)?\s+state=(\S+)/;
+const RE_SIGNAL      = /buy_signal\s+close=([\d.]+)\s+sma\d+=[.\d]+\s+rsi\d+=([\d.]+)/;
 const RE_TRADE_OPEN  = /paper_trade_open\s+entry_price=([\d.]+)\s+qty=([\d.]+)/;
 const RE_UNREALIZED  = /unrealized_pnl=([-\d.]+)\s+unrealized_pnl_pct=([-\d.]+)/;
 const RE_TRADE_CLOSE = /paper_trade_close/;
@@ -626,7 +626,7 @@ function processLog(text) {
     if (!line.includes('buy_signal')) return;
     const m   = line.match(RE_SIGNAL);
     const tsM = line.match(RE_TS);
-    if (m) newSignals.push({ ts: tsM ? tsM[1] : '', close: m[2], rsi: m[3] });
+    if (m) newSignals.push({ ts: tsM ? tsM[1] : '', close: m[1], rsi: m[2] });
   });
   if (newSignals.length !== signals.length) {
     signals = newSignals;
