@@ -3,7 +3,7 @@
 ## Stack
 - Python 3.13.5, asyncio, ccxt, aiohttp, python-dotenv
 - Exchange: Binance Testnet (paper) / Binance Real (fase 3)
-- Sin Pandas ni NumPy — estructuras nativas Python unicamente
+- Pandas para cálculos de indicadores (strategy/); estructuras nativas Python en el resto
 - GCP e2-micro instancia separada, Docker NO en esta VM
 
 ## Arquitectura
@@ -21,9 +21,10 @@
 - place_order_safe() siempre confirma la orden en el exchange, no solo localmente
 
 ## Indicadores disponibles (strategy/indicators.py)
-- sma(series, period) -> float | None
-- ema(series, period) -> float | None
-- rsi(series, period=14) -> float | None
+- sma(df, period) -> pd.Series
+- ema(df, period) -> pd.Series
+- rsi(df, period=14) -> pd.Series
+- df tiene columna 'close': float; funciones puras, sin side effects
 
 ## Git workflow
 - main: produccion estable
