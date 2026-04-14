@@ -3,7 +3,7 @@ import logging
 import os
 from typing import Any
 
-import ccxt.async_support as ccxt
+import ccxt
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,7 +15,8 @@ _RETRY_BASE_DELAY: float = 1.0  # seconds; doubles each attempt
 
 
 class BinanceClient:
-    """Async Binance client connected to testnet.
+    """Binance client for testnet. HTTP calls run in a thread executor so the
+    asyncio event loop is never blocked.
 
     Credentials are loaded from .env:
         BINANCE_API_KEY
@@ -30,9 +31,12 @@ class BinanceClient:
                 'BINANCE_API_KEY and BINANCE_API_SECRET must be set in .env'
             )
 
+        # Sync ccxt — HTTP calls are dispatched via run_in_executor so they
+        # never block the event loop.
         self._exchange: ccxt.binance = ccxt.binance({
             'apiKey': api_key,
             'secret': api_secret,
+            'timeout': 10000,
             'options': {'defaultType': 'spot'},
         })
         self._exchange.set_sandbox_mode(True)
@@ -45,18 +49,21 @@ class BinanceClient:
     ) -> list[dict[str, Any]]:
         """Fetch OHLCV candles for *symbol* / *timeframe*.
 
+        Runs the blocking ccxt call in the default thread executor.
         Retries up to _MAX_RETRIES times with exponential backoff on
-        RateLimitExceeded and NetworkError. Other ExchangeErrors propagate
-        immediately. Raises the final exception when all retries are exhausted.
+        RequestTimeout, NetworkError, and RateLimitExceeded.
+        Other ExchangeErrors propagate immediately.
 
         Returns a list of dicts: {ts, open, high, low, close, volume}.
         """
+        loop = asyncio.get_running_loop()
         last_exc: Exception | None = None
 
         for attempt in range(1, _MAX_RETRIES + 1):
             try:
-                raw: list[list[Any]] = await self._exchange.fetch_ohlcv(
-                    symbol, timeframe, limit=limit
+                raw: list[list[Any]] = await loop.run_in_executor(
+                    None,
+                    lambda: self._exchange.fetch_ohlcv(symbol, timeframe, limit=limit),
                 )
                 candles: list[dict[str, Any]] = [
                     {
@@ -74,6 +81,14 @@ class BinanceClient:
                     symbol, timeframe, limit, len(candles), attempt,
                 )
                 return candles
+
+            except ccxt.RequestTimeout as exc:
+                last_exc = exc
+                delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning(
+                    'RequestTimeout symbol=%s attempt=%d/%d retry_in=%.1fs',
+                    symbol, attempt, _MAX_RETRIES, delay,
+                )
 
             except ccxt.RateLimitExceeded as exc:
                 last_exc = exc
@@ -105,4 +120,4 @@ class BinanceClient:
         raise last_exc  # type: ignore[misc]
 
     async def close(self) -> None:
-        await self._exchange.close()
+        pass  # Sync ccxt manages connections internally; nothing to close.

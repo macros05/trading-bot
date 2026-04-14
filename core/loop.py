@@ -76,8 +76,8 @@ async def trading_loop(
         current_sma: float = float(sma(df, period=_SMA_PERIOD).iloc[-1])
         current_rsi: float = float(rsi(df, period=_RSI_PERIOD).iloc[-1])
 
-        logger.debug(
-            'tick symbol=%s close=%.4f sma%d=%.4f rsi%d=%.2f state=%s',
+        logger.info(
+            'tick symbol=%s close=%.2f sma%d=%.2f rsi%d=%.1f state=%s',
             symbol, current_close, _SMA_PERIOD, current_sma,
             _RSI_PERIOD, current_rsi, state_manager.get_state().value,
         )
