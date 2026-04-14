@@ -1,0 +1,20 @@
+{
+  "period": {
+    "from": "2026-04-01T11:51:00Z",
+    "to": "2026-04-14T12:09:00Z",
+    "candles": 18739
+  },
+  "parameters": {
+    "symbol": "BTC/USDT",
+    "timeframe": "1m",
+    "rsi_threshold": 35.0,
+    "sma_period": 20,
+    "sl_pct": 0.02,
+    "tp_pct": 0.03,
+    "risk_pct": 0.01
+  },
+  "initial_balance": 10000.0,
+  "final_balance": 10000.0,
+  "num_trades": 0,
+  "note": "no trades executed during this period"
+}
