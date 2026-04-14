@@ -1,7 +1,7 @@
 {
   "period": {
-    "from": "2026-01-14T13:25:00Z",
-    "to": "2026-04-14T13:25:00Z",
+    "from": "2026-01-14T14:10:00Z",
+    "to": "2026-04-14T14:10:00Z",
     "candles": 129601
   },
   "risk_pct": 0.01,
@@ -505,6 +505,20 @@
           "exit_ts": 1775998320000
         }
       ]
+    },
+    {
+      "label": "RSI<40+SMA20+drop>1%/10m",
+      "parameters": {
+        "strategy": "combined",
+        "rsi_threshold": 40.0,
+        "sma_period": 20,
+        "sl_pct": 0.025,
+        "tp_pct": 0.04,
+        "drop_pct": 0.01,
+        "lookback": 10
+      },
+      "num_trades": 0,
+      "sharpe_ratio": 0.0
     }
   ]
 }

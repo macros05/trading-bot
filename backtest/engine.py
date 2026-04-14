@@ -106,6 +106,19 @@ _MEAN_REV = ParamSet(
     lookback=10,
 )
 
+# ── sweep 5: combined RSI+SMA+mean-rev filter ──────────────────────────────
+
+_COMBINED = ParamSet(
+    label='RSI<40+SMA20+drop>1%/10m',
+    rsi_threshold=40.0,
+    sma_period=20,
+    sl_pct=0.025,
+    tp_pct=0.040,
+    strategy='combined',
+    drop_pct=0.01,    # 1% drop over lookback bars
+    lookback=10,
+)
+
 
 # ── exchange ───────────────────────────────────────────────────────────────
 
@@ -269,6 +282,46 @@ def _simulate_mean_rev(
     return trades, equity
 
 
+def _simulate_combined(
+    df: pd.DataFrame,
+    rsi_s: pd.Series,
+    sma_s: pd.Series | None,
+    params: ParamSet,
+) -> tuple[list[dict], list[float]]:
+    """RSI<threshold AND close>SMA AND price dropped >drop_pct over lookback bars."""
+    drop_s    = df['close'].pct_change(params.lookback)
+    min_c     = max(_RSI_PERIOD, params.sma_period or 0, params.lookback)
+    balance   = _BALANCE
+    trades:   list[dict]  = []
+    equity:   list[float] = [balance]
+    position: dict | None = None
+
+    for i in range(min_c, len(df)):
+        close    = float(df['close'].iloc[i])
+        rsi_val  = float(rsi_s.iloc[i])
+        sma_val  = float(sma_s.iloc[i]) if sma_s is not None else None
+        drop_val = float(drop_s.iloc[i])
+        if pd.isna(rsi_val) or pd.isna(drop_val) or (sma_val is not None and pd.isna(sma_val)):
+            continue
+        ts = int(df['ts'].iloc[i])
+        if position is None:
+            rsi_ok  = rsi_val < params.rsi_threshold
+            sma_ok  = sma_val is None or close > sma_val
+            drop_ok = should_enter_mean_rev(drop_val, params.drop_pct)
+            if rsi_ok and sma_ok and drop_ok:
+                qty      = (balance * _RISK_PCT) / close
+                position = {'entry_price': close, 'qty': qty, 'entry_ts': ts}
+            continue
+        reason = check_exit(close, position['entry_price'], params.sl_pct, params.tp_pct)
+        if reason:
+            trade, balance = _close_position(position, close, ts, reason, balance)
+            trades.append(trade)
+            equity.append(balance)
+            position = None
+
+    return trades, equity
+
+
 # ── metrics ────────────────────────────────────────────────────────────────
 
 def _max_drawdown(equity: list[float]) -> float:
@@ -400,6 +453,8 @@ def _run_simulation(
     if params.strategy == 'mean_rev':
         return _simulate_mean_rev(df, params)
     sma_s = sma_cache.get(params.sma_period) if params.sma_period is not None else None
+    if params.strategy == 'combined':
+        return _simulate_combined(df, rsi_s, sma_s, params)
     min_c = max(_RSI_PERIOD, params.sma_period or 0)
     return _simulate_config(
         df, rsi_s, sma_s, params.rsi_threshold, min_c, params.sl_pct, params.tp_pct,
@@ -610,11 +665,11 @@ def run() -> None:
                   'SL/TP OPTIMISATION  RSI<40 + SMA20', sltp_sub)
     logger.info('running multi-symbol analysis (%s)...', ', '.join(_SYMBOLS))
     _run_multi_symbol(exchange)
-    logger.info('running strategy comparison: rsi_sma vs mean_rev on BTC/USDT...')
-    comp_sub = (f'RSI<40+SMA20 SL2.5%/TP4.0%  vs  MeanRev drop>1.5%/10m SL1%/TP1%  '
-                f'|  Risk={_RISK_PCT*100:.1f}%  Balance={_BALANCE:.0f} USDT')
+    logger.info('running strategy comparison: rsi_sma vs mean_rev vs combined on BTC/USDT...')
+    comp_sub = (f'Risk={_RISK_PCT*100:.1f}%  Balance={_BALANCE:.0f} USDT  |  '
+                f'RSI+SMA SL2.5%/TP4.0%  |  MeanRev SL1%/TP1%  |  Combined SL2.5%/TP4.0%')
     _report_sweep(
-        _run_param_sweep(df, [_WINNER, _MEAN_REV]), period,
+        _run_param_sweep(df, [_WINNER, _MEAN_REV, _COMBINED]), period,
         _STRATEGY_COMP_FILE, 'STRATEGY COMPARISON  BTC/USDT', comp_sub,
     )
 

@@ -23,18 +23,21 @@ from backtest.engine import (
     _max_drawdown,
     _process_bar_config,
     _sharpe,
+    _simulate_combined,
     _simulate_config,
     _simulate_mean_rev,
     _to_dataframe,
     _trade_metrics,
     _ts_to_iso,
     _BALANCE,
+    _COMBINED,
     _MEAN_REV,
     _RSI_PERIOD,
     _SL_PCT,
     _SYMBOLS,
     _TP_PCT,
     _WINNER,
+    ParamSet,
 )
 from strategy.indicators import rsi, sma
 
@@ -367,6 +370,77 @@ class TestComputeMetrics(unittest.TestCase):
         report = _compute_metrics(trades, [_BALANCE, _BALANCE + 10.0], df)
         self.assertIn('trades', report)
         self.assertEqual(len(report['trades']), 1)
+
+
+# ---------------------------------------------------------------------------
+# _simulate_combined
+# ---------------------------------------------------------------------------
+
+def _make_combined_params(
+    rsi_threshold: float = 60.0,
+    sma_period: int = 20,
+    drop_pct: float = 0.01,
+    lookback: int = 10,
+) -> ParamSet:
+    """Helper: builds a ParamSet for the combined strategy with test-friendly defaults."""
+    return ParamSet('test_combined', rsi_threshold, sma_period, 0.025, 0.040,
+                    'combined', drop_pct, lookback)
+
+
+class TestSimulateCombined(unittest.TestCase):
+
+    def test_no_trades_when_rsi_threshold_zero(self):
+        """rsi < 0.0 is never true → no entry fires."""
+        df    = _make_df(100)
+        rsi_s = rsi(df, 14)
+        sma_s = sma(df, 20)
+        trades, equity = _simulate_combined(df, rsi_s, sma_s, _make_combined_params(rsi_threshold=0.0))
+        self.assertEqual(len(trades), 0)
+        self.assertEqual(equity, [_BALANCE])
+
+    def test_no_trades_when_drop_condition_never_met(self):
+        """Patching should_enter_mean_rev to always return False blocks entry."""
+        df    = _make_df(100, trend=0.1)  # uptrend: close > SMA20
+        rsi_s = rsi(df, 14)
+        sma_s = sma(df, 20)
+        with patch('backtest.engine.should_enter_mean_rev', return_value=False):
+            trades, _ = _simulate_combined(df, rsi_s, sma_s, _make_combined_params())
+        self.assertEqual(len(trades), 0)
+
+    def test_no_trades_when_sma_blocks(self):
+        """In a downtrend close < SMA20, so SMA filter blocks every entry."""
+        df    = _make_df(100, trend=-0.3)   # downtrend: close < SMA20
+        rsi_s = rsi(df, 14)
+        sma_s = sma(df, 20)
+        with patch('backtest.engine.should_enter_mean_rev', return_value=True):
+            trades, _ = _simulate_combined(df, rsi_s, sma_s, _make_combined_params())
+        self.assertEqual(len(trades), 0)
+
+    def test_entry_fires_when_all_three_conditions_met(self):
+        """rsi_threshold=100 always passes; uptrend ensures close>SMA; drop patched True."""
+        df    = _make_df(100, trend=0.1)   # uptrend: close > SMA20
+        rsi_s = rsi(df, 14)
+        sma_s = sma(df, 20)
+        enter_seq = iter([True] + [False] * 500)
+        exit_seq  = iter(['take_profit'] + [None] * 500)
+        with patch('backtest.engine.should_enter_mean_rev',
+                   side_effect=lambda *_: next(enter_seq)), \
+             patch('backtest.engine.check_exit',
+                   side_effect=lambda *_: next(exit_seq)):
+            trades, equity = _simulate_combined(
+                df, rsi_s, sma_s, _make_combined_params(rsi_threshold=100.0),
+            )
+        self.assertEqual(len(trades), 1)
+        self.assertEqual(len(equity), 2)
+
+    def test_combined_config_constant_has_correct_params(self):
+        self.assertEqual(_COMBINED.strategy,  'combined')
+        self.assertAlmostEqual(_COMBINED.rsi_threshold, 40.0)
+        self.assertEqual(_COMBINED.sma_period, 20)
+        self.assertAlmostEqual(_COMBINED.sl_pct,   0.025)
+        self.assertAlmostEqual(_COMBINED.tp_pct,   0.040)
+        self.assertAlmostEqual(_COMBINED.drop_pct, 0.01)
+        self.assertEqual(_COMBINED.lookback,   10)
 
 
 # ---------------------------------------------------------------------------
