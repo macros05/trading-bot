@@ -1,11 +1,11 @@
-import asyncio
-import json
 import logging
 import time
+import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import ccxt
+import pandas as pd
 
 from core.macro_filter import MacroFilter, NO_TRADE
 from core.state import BotState, StateManager
@@ -17,12 +17,41 @@ from strategy.signals import calc_pnl, check_exit, should_enter
 
 logger = logging.getLogger(__name__)
 
-_SMA_PERIOD = 20
-_RSI_PERIOD = 14
+_SMA_PERIOD     = 20
+_RSI_PERIOD     = 14
 _VOL_SMA_PERIOD = 20
-_MIN_CANDLES = max(_SMA_PERIOD, _RSI_PERIOD, _VOL_SMA_PERIOD)
-_TRADES_FILE = Path('trades_history.json')
+_MIN_CANDLES    = max(_SMA_PERIOD, _RSI_PERIOD, _VOL_SMA_PERIOD)
+_TRADES_FILE    = Path('trades_history.json')
 
+
+# ── config dataclass ───────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class _LoopConfig:
+    symbol:    str
+    timeframe: str
+    limit:     int
+    interval:  float
+    balance:   float
+    risk_pct:  float
+    sl_pct:    float
+    tp_pct:    float
+
+
+def _parse_config(raw: dict[str, Any]) -> _LoopConfig:
+    return _LoopConfig(
+        symbol    = raw['symbol'],
+        timeframe = raw['timeframe'],
+        limit     = raw.get('limit', 200),
+        interval  = raw['interval_seconds'],
+        balance   = raw.get('paper_balance', 10_000.0),
+        risk_pct  = raw.get('risk_pct', 0.01),
+        sl_pct    = raw.get('stop_loss_pct', 0.02),
+        tp_pct    = raw.get('take_profit_pct', 0.03),
+    )
+
+
+# ── trade persistence ──────────────────────────────────────────────────────
 
 def _load_trades() -> list[dict]:
     if _TRADES_FILE.exists():
@@ -38,6 +67,8 @@ def _save_trade(trade: dict) -> None:
     trades.append(trade)
     _TRADES_FILE.write_text(json.dumps(trades, indent=2))
 
+
+# ── position helpers ───────────────────────────────────────────────────────
 
 def _open_position(
     state_manager: StateManager,
@@ -96,6 +127,97 @@ def _close_position(
     state_manager.set_state(BotState.WAITING_SIGNAL)
 
 
+# ── per-tick helpers ───────────────────────────────────────────────────────
+
+def _compute_indicators(df: pd.DataFrame) -> tuple[float, float, float, float, float]:
+    """Returns (close, sma_val, rsi_val, volume, vol_sma20)."""
+    close = float(df['close'].iloc[-1])
+    sma_v = float(sma(df, period=_SMA_PERIOD).iloc[-1])
+    rsi_v = float(rsi(df, period=_RSI_PERIOD).iloc[-1])
+    vol   = float(df['volume'].iloc[-1])
+    vol_s = float(volume_sma(df, period=_VOL_SMA_PERIOD).iloc[-1])
+    return close, sma_v, rsi_v, vol, vol_s
+
+
+def _log_tick(
+    symbol: str,
+    close: float,
+    sma_val: float,
+    rsi_val: float,
+    vol_ratio: float,
+    bot_state: BotState,
+) -> None:
+    logger.info(
+        'tick symbol=%s close=%.2f sma%d=%.2f rsi%d=%.1f vol_ratio=%.2f state=%s',
+        symbol, close, _SMA_PERIOD, sma_val, _RSI_PERIOD, rsi_val, vol_ratio, bot_state.value,
+    )
+
+
+def _handle_waiting_signal(
+    state_manager: StateManager,
+    risk_manager: RiskManager,
+    balance: float,
+    risk_pct: float,
+    close: float,
+    sma_val: float,
+    rsi_val: float,
+) -> None:
+    # Volume filter (1.2× vol_sma20) was tested and discarded:
+    # collapsed 10 → 1 entry over 90 days, Sharpe 0.19 → 0.00.
+    if not should_enter(close, sma_val, rsi_val, rsi_threshold=35.0):
+        return
+    logger.info(
+        'buy_signal close=%.4f sma%d=%.4f rsi%d=%.2f',
+        close, _SMA_PERIOD, sma_val, _RSI_PERIOD, rsi_val,
+    )
+    qty = risk_manager.position_size(balance, risk_pct=risk_pct) / close
+    if qty > 0:
+        _open_position(state_manager, close, qty)
+
+
+def _handle_in_position(
+    state_manager: StateManager,
+    risk_manager: RiskManager,
+    close: float,
+    sl_pct: float,
+    tp_pct: float,
+) -> None:
+    position = state_manager.get_position()
+    if position is None:
+        logger.error('state=IN_POSITION but no position found, resetting')
+        state_manager.set_state(BotState.WAITING_SIGNAL)
+        return
+    pnl_usdt, pnl_pct = calc_pnl(close, position['entry_price'], position['qty'])
+    logger.info('unrealized_pnl=%.4f unrealized_pnl_pct=%.2f%%', pnl_usdt, pnl_pct)
+    reason = check_exit(close, position['entry_price'], stop_loss_pct=sl_pct, take_profit_pct=tp_pct)
+    if reason:
+        _close_position(state_manager, risk_manager, close, reason)
+
+
+async def _process_tick(
+    buffer: CandleBuffer,
+    state_manager: StateManager,
+    risk_manager: RiskManager,
+    cfg: _LoopConfig,
+    candles: list[dict[str, Any]],
+) -> None:
+    buffer.add_many(candles)
+    if not buffer.is_ready(_MIN_CANDLES):
+        logger.debug('buffer_not_ready len=%d required=%d', len(buffer), _MIN_CANDLES)
+        return
+    df = buffer.to_dataframe()
+    close, sma_v, rsi_v, volume, vol_s = _compute_indicators(df)
+    bot_state = state_manager.get_state()
+    _log_tick(cfg.symbol, close, sma_v, rsi_v, volume / vol_s if vol_s > 0 else 0.0, bot_state)
+    if bot_state == BotState.WAITING_SIGNAL:
+        _handle_waiting_signal(state_manager, risk_manager, cfg.balance, cfg.risk_pct,
+                               close, sma_v, rsi_v)
+    elif bot_state == BotState.IN_POSITION:
+        _handle_in_position(state_manager, risk_manager, close, cfg.sl_pct, cfg.tp_pct)
+
+
+# ── main loop ──────────────────────────────────────────────────────────────
+
 async def trading_loop(
     client: BinanceClient,
     buffer: CandleBuffer,
@@ -104,114 +226,36 @@ async def trading_loop(
     config: dict[str, Any],
     macro_filter: MacroFilter | None = None,
 ) -> None:
-    """Main trading loop. Runs indefinitely until cancelled.
+    """Main trading loop. Streams candles via WebSocket; falls back to REST polling.
 
     Expected config keys:
         symbol            str    e.g. 'BTC/USDT'
         timeframe         str    e.g. '1m'
-        limit             int    candles to fetch per tick (default 200)
-        interval_seconds  float  sleep between iterations
+        limit             int    candles per fetch/stream page (default 200)
+        interval_seconds  float  REST fallback polling interval
         paper_balance     float  simulated USDT balance
         risk_pct          float  fraction of balance to risk per trade
         stop_loss_pct     float  stop loss threshold (default 0.02)
         take_profit_pct   float  take profit threshold (default 0.03)
     """
-    symbol: str       = config['symbol']
-    timeframe: str    = config['timeframe']
-    limit: int        = config.get('limit', 200)
-    interval: float   = config['interval_seconds']
-    balance: float    = config.get('paper_balance', 10_000.0)
-    risk_pct: float   = config.get('risk_pct', 0.01)
-    sl_pct: float     = config.get('stop_loss_pct', 0.02)
-    tp_pct: float     = config.get('take_profit_pct', 0.03)
-
+    cfg = _parse_config(config)
     logger.info(
         'trading_loop started symbol=%s timeframe=%s interval=%ss balance=%.2f',
-        symbol, timeframe, interval, balance,
+        cfg.symbol, cfg.timeframe, cfg.interval, cfg.balance,
     )
 
-    while True:
+    async def _on_candles(candles: list[dict[str, Any]]) -> None:
         if risk_manager.is_circuit_breaker_active():
-            logger.warning(
-                'circuit_breaker=active daily_pnl=%.4f sleeping %ss',
-                risk_manager.get_daily_pnl(), interval,
-            )
-            await asyncio.sleep(interval)
-            continue
-
+            logger.warning('circuit_breaker=active daily_pnl=%.4f', risk_manager.get_daily_pnl())
+            return
         if macro_filter is not None:
             mode = await macro_filter.get_mode()
             if mode == NO_TRADE:
                 logger.info('macro_mode=NO_TRADE skipping_signal_evaluation')
-                await asyncio.sleep(interval)
-                continue
+                return
+        await _process_tick(buffer, state_manager, risk_manager, cfg, candles)
 
-        try:
-            candles: list[dict[str, Any]] = await client.fetch_candles(
-                symbol=symbol, timeframe=timeframe, limit=limit,
-            )
-        except (ccxt.RateLimitExceeded, ccxt.NetworkError) as exc:
-            logger.warning('fetch_failed error=%s sleeping %ss', exc, interval)
-            await asyncio.sleep(interval)
-            continue
-
-        buffer.add_many(candles)
-
-        if not buffer.is_ready(_MIN_CANDLES):
-            logger.debug(
-                'buffer_not_ready len=%d required=%d sleeping %ss',
-                len(buffer), _MIN_CANDLES, interval,
-            )
-            await asyncio.sleep(interval)
-            continue
-
-        df = buffer.to_dataframe()
-        current_close: float  = float(df['close'].iloc[-1])
-        current_sma: float    = float(sma(df, period=_SMA_PERIOD).iloc[-1])
-        current_rsi: float    = float(rsi(df, period=_RSI_PERIOD).iloc[-1])
-        current_volume: float = float(df['volume'].iloc[-1])
-        vol_sma20: float      = float(volume_sma(df, period=_VOL_SMA_PERIOD).iloc[-1])
-        bot_state             = state_manager.get_state()
-
-        logger.info(
-            'tick symbol=%s close=%.2f sma%d=%.2f rsi%d=%.1f vol_ratio=%.2f state=%s',
-            symbol, current_close, _SMA_PERIOD, current_sma,
-            _RSI_PERIOD, current_rsi,
-            current_volume / vol_sma20 if vol_sma20 > 0 else 0.0,
-            bot_state.value,
-        )
-
-        if bot_state == BotState.WAITING_SIGNAL:
-            # Volume filter (1.2× vol_sma20) was tested and discarded:
-            # collapsed 10 → 1 entry over 90 days, Sharpe 0.19 → 0.00.
-            if should_enter(current_close, current_sma, current_rsi, rsi_threshold=35.0):
-                logger.info(
-                    'buy_signal symbol=%s close=%.4f sma%d=%.4f rsi%d=%.2f',
-                    symbol, current_close, _SMA_PERIOD, current_sma,
-                    _RSI_PERIOD, current_rsi,
-                )
-                qty = risk_manager.position_size(balance, risk_pct=risk_pct) / current_close
-                if qty > 0:
-                    _open_position(state_manager, current_close, qty)
-
-        elif bot_state == BotState.IN_POSITION:
-            position = state_manager.get_position()
-            if position is None:
-                logger.error('state=IN_POSITION but no position found, resetting')
-                state_manager.set_state(BotState.WAITING_SIGNAL)
-            else:
-                pnl_usdt, pnl_pct = calc_pnl(current_close, position['entry_price'], position['qty'])
-                logger.info(
-                    'unrealized_pnl=%.4f unrealized_pnl_pct=%.2f%%',
-                    pnl_usdt, pnl_pct,
-                )
-                exit_reason = check_exit(
-                    current_close,
-                    position['entry_price'],
-                    stop_loss_pct=sl_pct,
-                    take_profit_pct=tp_pct,
-                )
-                if exit_reason:
-                    _close_position(state_manager, risk_manager, current_close, exit_reason)
-
-        await asyncio.sleep(interval)
+    await client.watch_candles(
+        cfg.symbol, cfg.timeframe, _on_candles,
+        limit=cfg.limit, rest_interval=cfg.interval,
+    )

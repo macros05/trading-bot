@@ -4,6 +4,7 @@ aiohttp==3.13.5
 aiosignal==1.4.0
 attrs==26.1.0
 ccxt==4.5.48
+ccxtpro==1.0.1
 certifi==2026.2.25
 cffi==2.0.0
 charset-normalizer==3.4.7

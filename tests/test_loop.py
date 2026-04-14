@@ -1,9 +1,9 @@
 """
 Tests for core/loop.py.
 
-Each test runs exactly one loop iteration by patching asyncio.sleep to raise
-CancelledError on the first call, which is the natural way to stop an asyncio
-task from outside.
+The loop is now driven by watch_candles (WebSocket). Tests inject candles by
+mocking client.watch_candles to call the callback once then raise
+CancelledError, which is the natural way to stop an asyncio task.
 
 Run from project root:
     python -m unittest tests.test_loop
@@ -28,14 +28,14 @@ from data.candles import CandleBuffer
 
 def _config() -> dict:
     return {
-        'symbol':          'BTC/USDT',
-        'timeframe':       '1m',
-        'limit':           200,
+        'symbol':           'BTC/USDT',
+        'timeframe':        '1m',
+        'limit':            200,
         'interval_seconds': 60,
-        'paper_balance':   10_000.0,
-        'risk_pct':        0.01,
-        'stop_loss_pct':   0.02,
-        'take_profit_pct': 0.03,
+        'paper_balance':    10_000.0,
+        'risk_pct':         0.01,
+        'stop_loss_pct':    0.02,
+        'take_profit_pct':  0.03,
     }
 
 
@@ -48,8 +48,22 @@ def _candles(n: int, close: float = 100.0) -> list[dict]:
 
 
 def _mock_client(candles: list[dict]) -> MagicMock:
+    """Client whose watch_candles calls the callback once then cancels."""
     client = MagicMock()
     client.fetch_candles = AsyncMock(return_value=candles)
+
+    async def _fake_watch(
+        symbol: str,
+        timeframe: str,
+        callback,
+        *,
+        limit: int = 200,
+        rest_interval: float = 60.0,
+    ) -> None:
+        await callback(candles)
+        raise asyncio.CancelledError
+
+    client.watch_candles = _fake_watch
     return client
 
 
@@ -89,16 +103,17 @@ async def _run_one_tick(
     config=None,
     macro_filter=None,
 ):
-    """Run the loop for exactly one iteration (sleep raises CancelledError)."""
+    """Run the loop for exactly one callback invocation.
+
+    watch_candles mock calls the callback once then raises CancelledError,
+    which propagates out of trading_loop as expected.
+    """
     cfg = config or _config()
-    with patch('core.loop.asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-        mock_sleep.side_effect = asyncio.CancelledError
-        with unittest.TestCase().assertRaises(asyncio.CancelledError):
-            await trading_loop(
-                client, buffer, state_manager, risk_manager, cfg,
-                macro_filter=macro_filter,
-            )
-    return mock_sleep
+    with unittest.TestCase().assertRaises(asyncio.CancelledError):
+        await trading_loop(
+            client, buffer, state_manager, risk_manager, cfg,
+            macro_filter=macro_filter,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -107,45 +122,23 @@ async def _run_one_tick(
 
 class TestCircuitBreaker(unittest.IsolatedAsyncioTestCase):
 
-    async def test_skips_fetch_when_active(self):
-        client = _mock_client(_candles(25))
+    async def test_does_not_evaluate_signals_when_active(self):
+        """circuit_breaker=True → callback returns early, no state access."""
+        state_manager = _mock_state()
         await _run_one_tick(
-            client, CandleBuffer(), _mock_state(),
+            _mock_client(_candles(25)), CandleBuffer(), state_manager,
             _mock_risk(circuit_breaker=True, daily_pnl=-0.05),
         )
-        client.fetch_candles.assert_not_called()
+        state_manager.get_state.assert_not_called()
 
-    async def test_sleeps_interval_when_active(self):
-        mock_sleep = await _run_one_tick(
-            _mock_client([]), CandleBuffer(), _mock_state(),
-            _mock_risk(circuit_breaker=True, daily_pnl=-0.05),
-        )
-        mock_sleep.assert_awaited_once_with(60)
-
-
-# ---------------------------------------------------------------------------
-# Network errors — loop must not break
-# ---------------------------------------------------------------------------
-
-class TestNetworkErrors(unittest.IsolatedAsyncioTestCase):
-
-    async def _run_with_fetch_error(self, error):
-        client = MagicMock()
-        client.fetch_candles = AsyncMock(side_effect=error)
-        return await _run_one_tick(client, CandleBuffer(), _mock_state(), _mock_risk())
-
-    async def test_network_error_does_not_propagate(self):
-        import ccxt as _ccxt
-        await self._run_with_fetch_error(_ccxt.NetworkError('timeout'))
-
-    async def test_rate_limit_does_not_propagate(self):
-        import ccxt as _ccxt
-        await self._run_with_fetch_error(_ccxt.RateLimitExceeded('rate limit'))
-
-    async def test_sleeps_after_network_error(self):
-        import ccxt as _ccxt
-        mock_sleep = await self._run_with_fetch_error(_ccxt.NetworkError('timeout'))
-        mock_sleep.assert_awaited_once_with(60)
+    async def test_does_not_open_position_when_active(self):
+        state_manager = _mock_state(BotState.WAITING_SIGNAL)
+        with patch('core.loop.should_enter', return_value=True):
+            await _run_one_tick(
+                _mock_client(_candles(25)), CandleBuffer(), state_manager,
+                _mock_risk(circuit_breaker=True),
+            )
+        state_manager.set_state.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +147,7 @@ class TestNetworkErrors(unittest.IsolatedAsyncioTestCase):
 
 class TestBufferNotReady(unittest.IsolatedAsyncioTestCase):
 
-    async def test_sleeps_without_evaluating_signal(self):
+    async def test_does_not_evaluate_signal_when_buffer_short(self):
         state_manager = _mock_state()
         await _run_one_tick(
             _mock_client(_candles(5)), CandleBuffer(), state_manager, _mock_risk(),
@@ -169,7 +162,6 @@ class TestBufferNotReady(unittest.IsolatedAsyncioTestCase):
 class TestEntrySignal(unittest.IsolatedAsyncioTestCase):
 
     async def test_opens_position_when_signal_fires(self):
-        """When should_enter returns True, state transitions to IN_POSITION."""
         state_manager = _mock_state(BotState.WAITING_SIGNAL)
         risk = _mock_risk(position_size=100.0)
 
@@ -199,7 +191,6 @@ class TestEntrySignal(unittest.IsolatedAsyncioTestCase):
         state_manager.set_position.assert_not_called()
 
     async def test_no_position_when_position_size_is_zero(self):
-        """Circuit breaker makes position_size return 0; no trade should open."""
         state_manager = _mock_state(BotState.WAITING_SIGNAL)
         risk = _mock_risk(position_size=0.0)
 
@@ -213,7 +204,7 @@ class TestEntrySignal(unittest.IsolatedAsyncioTestCase):
 
     async def test_qty_computed_from_position_size_and_close(self):
         state_manager = _mock_state(BotState.WAITING_SIGNAL)
-        risk = _mock_risk(position_size=200.0)  # 200 USDT / 100 close = 2.0 BTC
+        risk = _mock_risk(position_size=200.0)   # 200 USDT / 100 close = 2.0 BTC
 
         with patch('core.loop.should_enter', return_value=True), \
              patch('core.loop._save_trade'):
@@ -312,7 +303,6 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         state_manager.set_state.assert_not_called()
 
     async def test_state_reset_when_position_missing(self):
-        """If state is IN_POSITION but position is None, reset to WAITING."""
         state_manager = _mock_state(BotState.IN_POSITION, position=None)
 
         await _run_one_tick(
@@ -329,25 +319,30 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
 
 class TestMisc(unittest.IsolatedAsyncioTestCase):
 
-    async def test_fetch_called_with_config_params(self):
-        client = _mock_client(_candles(25))
-        await _run_one_tick(client, CandleBuffer(), _mock_state(), _mock_risk())
-        client.fetch_candles.assert_called_once_with(
-            symbol='BTC/USDT', timeframe='1m', limit=200,
-        )
+    async def test_watch_candles_called_with_config_params(self):
+        """trading_loop passes symbol, timeframe, limit, rest_interval to watch_candles."""
+        calls: list[tuple] = []
 
-    async def test_buffer_populated_after_fetch(self):
+        async def _capture(symbol, timeframe, callback, *, limit, rest_interval):
+            calls.append((symbol, timeframe, limit, rest_interval))
+            raise asyncio.CancelledError
+
+        client = MagicMock()
+        client.watch_candles = _capture
+
+        with unittest.TestCase().assertRaises(asyncio.CancelledError):
+            await trading_loop(
+                client, CandleBuffer(), _mock_state(), _mock_risk(), _config(),
+            )
+
+        self.assertEqual(calls, [('BTC/USDT', '1m', 200, 60)])
+
+    async def test_buffer_populated_after_callback(self):
         buffer = CandleBuffer()
         await _run_one_tick(
             _mock_client(_candles(25)), buffer, _mock_state(), _mock_risk(),
         )
         self.assertEqual(len(buffer), 25)
-
-    async def test_sleeps_interval_after_normal_tick(self):
-        mock_sleep = await _run_one_tick(
-            _mock_client(_candles(25)), CandleBuffer(), _mock_state(), _mock_risk(),
-        )
-        mock_sleep.assert_awaited_once_with(60)
 
 
 # ---------------------------------------------------------------------------
@@ -356,45 +351,40 @@ class TestMisc(unittest.IsolatedAsyncioTestCase):
 
 class TestMacroFilterGate(unittest.IsolatedAsyncioTestCase):
 
-    async def test_no_trade_skips_fetch(self):
-        """When macro mode is NO_TRADE, fetch_candles must not be called."""
-        client = _mock_client(_candles(25))
+    async def test_no_trade_does_not_evaluate_signals(self):
+        """When macro mode is NO_TRADE, callback returns early — no state access."""
+        state_manager = _mock_state()
         await _run_one_tick(
-            client, CandleBuffer(), _mock_state(), _mock_risk(),
+            _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
             macro_filter=_mock_macro_filter(NO_TRADE),
         )
-        client.fetch_candles.assert_not_called()
+        state_manager.get_state.assert_not_called()
 
-    async def test_no_trade_sleeps_interval(self):
-        mock_sleep = await _run_one_tick(
-            _mock_client([]), CandleBuffer(), _mock_state(), _mock_risk(),
-            macro_filter=_mock_macro_filter(NO_TRADE),
-        )
-        mock_sleep.assert_awaited_once_with(60)
-
-    async def test_normal_mode_proceeds_to_fetch(self):
-        """NORMAL macro mode must not suppress candle fetching."""
-        client = _mock_client(_candles(25))
+    async def test_normal_mode_evaluates_signals(self):
+        """NORMAL macro mode proceeds to signal evaluation."""
+        state_manager = _mock_state(BotState.WAITING_SIGNAL)
         await _run_one_tick(
-            client, CandleBuffer(), _mock_state(), _mock_risk(),
+            _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
             macro_filter=_mock_macro_filter(NORMAL),
         )
-        client.fetch_candles.assert_called_once()
+        state_manager.get_state.assert_called_once()
 
-    async def test_aggressive_mode_proceeds_to_fetch(self):
-        """AGGRESSIVE macro mode must not suppress candle fetching."""
-        client = _mock_client(_candles(25))
+    async def test_aggressive_mode_evaluates_signals(self):
+        """AGGRESSIVE macro mode proceeds to signal evaluation."""
+        state_manager = _mock_state(BotState.WAITING_SIGNAL)
         await _run_one_tick(
-            client, CandleBuffer(), _mock_state(), _mock_risk(),
+            _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
             macro_filter=_mock_macro_filter(AGGRESSIVE),
         )
-        client.fetch_candles.assert_called_once()
+        state_manager.get_state.assert_called_once()
 
-    async def test_no_macro_filter_proceeds_normally(self):
-        """When macro_filter=None (default), loop proceeds without it."""
-        client = _mock_client(_candles(25))
-        await _run_one_tick(client, CandleBuffer(), _mock_state(), _mock_risk())
-        client.fetch_candles.assert_called_once()
+    async def test_no_macro_filter_evaluates_signals(self):
+        """When macro_filter=None (default), loop proceeds without checking mode."""
+        state_manager = _mock_state(BotState.WAITING_SIGNAL)
+        await _run_one_tick(
+            _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
+        )
+        state_manager.get_state.assert_called_once()
 
     async def test_get_mode_called_once_per_tick(self):
         mf = _mock_macro_filter(NORMAL)

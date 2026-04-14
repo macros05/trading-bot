@@ -4,11 +4,12 @@ Tests for exchange/client.py.
 Run from project root:
     python -m unittest tests.test_exchange_client
 """
+import asyncio
 import importlib
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -212,6 +213,187 @@ class TestCredentials(unittest.TestCase):
             from exchange.client import BinanceClient
             with self.assertRaises(RuntimeError):
                 BinanceClient()
+
+
+# ---------------------------------------------------------------------------
+# watch_candles — WebSocket stream
+# ---------------------------------------------------------------------------
+
+class TestWatchCandles(unittest.IsolatedAsyncioTestCase):
+    """Tests for BinanceClient.watch_candles WebSocket streaming.
+
+    The ccxt.pro exchange is injected via _ensure_pro_exchange so tests do
+    not hit the network.
+    """
+
+    def _make_ws_client(self, pro_exchange) -> 'BinanceClient':  # type: ignore[name-defined]
+        client = _make_client(_mock_exchange())
+        client._ensure_pro_exchange = MagicMock(return_value=pro_exchange)
+        return client
+
+    def _mock_pro(self, side_effect=None, rows=None):
+        pro = MagicMock()
+        if rows is not None:
+            pro.watch_ohlcv = AsyncMock(return_value=rows)
+        elif side_effect is not None:
+            pro.watch_ohlcv = AsyncMock(side_effect=side_effect)
+        return pro
+
+    async def test_callback_receives_candle_dicts(self):
+        """watch_ohlcv rows are converted to {ts, open, high, low, close, volume} dicts."""
+        rows = [[1_000_000, 100.0, 110.0, 90.0, 105.0, 50.0]]
+        pro  = self._mock_pro(rows=rows)
+        received: list = []
+
+        async def _callback(candles):
+            received.extend(candles)
+            raise asyncio.CancelledError
+
+        with self.assertRaises(asyncio.CancelledError):
+            await self._make_ws_client(pro).watch_candles('BTC/USDT', '1m', _callback)
+
+        self.assertEqual(len(received), 1)
+        c = received[0]
+        self.assertEqual(c['ts'],     1_000_000)
+        self.assertEqual(c['open'],   100.0)
+        self.assertEqual(c['close'],  105.0)
+        self.assertEqual(c['volume'], 50.0)
+
+    async def test_reconnects_after_network_error(self):
+        """One NetworkError → reconnect → callback fires on second attempt."""
+        import ccxt as _ccxt
+        rows     = [[1000, 1, 2, 0.5, 1.5, 10.0]]
+        call_count = 0
+
+        async def _fail_then_succeed(*_a, **_kw):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise _ccxt.NetworkError('connection lost')
+            return rows
+
+        pro = MagicMock()
+        pro.watch_ohlcv = _fail_then_succeed
+        received: list = []
+
+        async def _callback(candles):
+            received.extend(candles)
+            raise asyncio.CancelledError
+
+        with patch('exchange.client.asyncio.sleep', new_callable=AsyncMock):
+            with self.assertRaises(asyncio.CancelledError):
+                await self._make_ws_client(pro).watch_candles('BTC/USDT', '1m', _callback)
+
+        self.assertEqual(call_count, 2)
+        self.assertEqual(len(received), 1)
+
+    async def test_falls_back_to_rest_after_max_failures(self):
+        """_WS_MAX_FAILURES consecutive errors → REST polling callback fires."""
+        import ccxt as _ccxt
+        from exchange.client import _WS_MAX_FAILURES
+
+        pro = self._mock_pro(side_effect=_ccxt.NetworkError('down'))
+        client = self._make_ws_client(pro)
+        client._exchange.fetch_ohlcv = MagicMock(return_value=_fake_ohlcv(3))
+
+        received: list = []
+
+        async def _callback(candles):
+            received.extend(candles)
+            raise asyncio.CancelledError
+
+        with patch('exchange.client.asyncio.sleep', new_callable=AsyncMock):
+            with self.assertRaises(asyncio.CancelledError):
+                await client.watch_candles('BTC/USDT', '1m', _callback, rest_interval=0.0)
+
+        self.assertEqual(pro.watch_ohlcv.call_count, _WS_MAX_FAILURES)
+        self.assertEqual(len(received), 3)
+
+    async def test_timeout_triggers_reconnect_not_immediate_fallback(self):
+        """A single TimeoutError causes reconnect; does not immediately fall back."""
+        rows = [[1000, 1, 2, 0.5, 1.5, 10.0]]
+        call_count = 0
+
+        async def _timeout_then_data(*_a, **_kw):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise asyncio.TimeoutError
+            return rows
+
+        pro = MagicMock()
+        pro.watch_ohlcv = _timeout_then_data
+        received: list = []
+
+        async def _callback(candles):
+            received.extend(candles)
+            raise asyncio.CancelledError
+
+        with patch('exchange.client.asyncio.sleep', new_callable=AsyncMock):
+            with self.assertRaises(asyncio.CancelledError):
+                await self._make_ws_client(pro).watch_candles('BTC/USDT', '1m', _callback)
+
+        self.assertEqual(call_count, 2)
+        self.assertEqual(len(received), 1)
+
+    async def test_cancelled_error_propagates_immediately(self):
+        """CancelledError from watch_ohlcv is never swallowed."""
+        pro = self._mock_pro(side_effect=asyncio.CancelledError)
+
+        with self.assertRaises(asyncio.CancelledError):
+            await self._make_ws_client(pro).watch_candles(
+                'BTC/USDT', '1m', lambda c: None,
+            )
+
+    async def test_import_error_falls_back_to_rest_immediately(self):
+        """If ccxt.pro cannot be imported, fall back to REST without retrying."""
+        client = _make_client(_mock_exchange())
+        client._ensure_pro_exchange = MagicMock(side_effect=ImportError('no ccxt.pro'))
+        client._exchange.fetch_ohlcv = MagicMock(return_value=_fake_ohlcv(2))
+
+        received: list = []
+
+        async def _callback(candles):
+            received.extend(candles)
+            raise asyncio.CancelledError
+
+        with patch('exchange.client.asyncio.sleep', new_callable=AsyncMock):
+            with self.assertRaises(asyncio.CancelledError):
+                await client.watch_candles('BTC/USDT', '1m', _callback, rest_interval=0.0)
+
+        # _ensure_pro_exchange called exactly once (no WS retries on ImportError)
+        client._ensure_pro_exchange.assert_called_once()
+        self.assertEqual(len(received), 2)
+
+    async def test_reconnects_after_drop_with_data_received(self):
+        """Disconnect after data resets backoff and reconnects without fallback."""
+        rows = [[1000, 1, 2, 0.5, 1.5, 10.0]]
+        import ccxt as _ccxt
+        call_count = 0
+
+        async def _data_then_drop(*_a, **_kw):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return rows                         # first call: success
+            if call_count == 2:
+                raise _ccxt.NetworkError('drop')    # drop after data
+            return rows                             # recovery
+
+        pro = MagicMock()
+        pro.watch_ohlcv = _data_then_drop
+        received: list = []
+
+        async def _callback(candles):
+            received.extend(candles)
+            if len(received) >= 2:
+                raise asyncio.CancelledError
+
+        with patch('exchange.client.asyncio.sleep', new_callable=AsyncMock):
+            with self.assertRaises(asyncio.CancelledError):
+                await self._make_ws_client(pro).watch_candles('BTC/USDT', '1m', _callback)
+
+        self.assertGreaterEqual(len(received), 2)
 
 
 if __name__ == '__main__':
