@@ -130,6 +130,63 @@
   .signal-rsi   { color: var(--blue); }
   #no-signals   { color: var(--gray); font-size: 12px; padding: 12px 0; }
 
+  /* ── POSITION ROW ── */
+  #position-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 12px;
+  }
+
+  /* active position */
+  #pos-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .pos-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--gray); margin-bottom: 4px; }
+  .pos-value { font-size: 20px; color: var(--text-hi); letter-spacing: -.01em; }
+  #pos-pnl-value {
+    font-size: 24px;
+    font-weight: bold;
+    transition: color .3s ease;
+  }
+  #pos-pnl-pct { font-size: 12px; margin-top: 2px; }
+  #pos-placeholder { color: var(--gray); font-size: 12px; padding: 8px 0; }
+
+  /* trade history table */
+  #history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  #history-table th {
+    text-align: left;
+    color: var(--gray);
+    font-size: 9px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 0 4px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  #history-table td {
+    padding: 5px 4px;
+    border-bottom: 1px solid rgba(51,65,85,.4);
+    color: var(--text);
+  }
+  .trade-win  { color: var(--green); font-weight: bold; }
+  .trade-loss { color: var(--red); font-weight: bold; }
+
+  /* summary row */
+  #summary-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+  }
+  .summary-label { color: var(--gray); margin-right: 4px; }
+
   /* ── LOG PANEL ── */
   #log-container {
     height: 240px;
@@ -227,6 +284,61 @@
   </div>
 </div>
 
+<!-- POSITION + HISTORY -->
+<div id="position-row">
+
+  <div class="card">
+    <div class="card-title">Active Position</div>
+    <div id="pos-placeholder">No open position</div>
+    <div id="pos-content" style="display:none">
+      <div id="pos-grid">
+        <div>
+          <div class="pos-label">Entry Price</div>
+          <div class="pos-value" id="pos-entry">—</div>
+        </div>
+        <div>
+          <div class="pos-label">Quantity (BTC)</div>
+          <div class="pos-value" id="pos-qty">—</div>
+        </div>
+        <div>
+          <div class="pos-label">Unrealized PnL</div>
+          <div id="pos-pnl-value">—</div>
+          <div id="pos-pnl-pct">—</div>
+        </div>
+        <div>
+          <div class="pos-label">Current Price</div>
+          <div class="pos-value" id="pos-current">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Trade History — last 10</div>
+    <div id="no-history" style="color:var(--gray);font-size:12px;padding:8px 0">No trades yet</div>
+    <table id="history-table" style="display:none">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Entry</th>
+          <th>Exit</th>
+          <th>PnL USDT</th>
+          <th>PnL %</th>
+          <th>Result</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="history-tbody"></tbody>
+    </table>
+    <div id="summary-row" style="display:none">
+      <span><span class="summary-label">Win rate:</span><span id="sum-winrate">—</span></span>
+      <span><span class="summary-label">Total PnL:</span><span id="sum-total-pnl">—</span></span>
+      <span><span class="summary-label">Trades:</span><span id="sum-count">—</span></span>
+    </div>
+  </div>
+
+</div>
+
 <!-- BOTTOM: live log -->
 <div class="card">
   <div class="card-title">Live Log — last 20 lines</div>
@@ -235,29 +347,36 @@
 
 <script>
 const LOG_URL      = 'bot.log';
+const TRADES_URL   = 'trades_history.json';
 const POLL_MS      = 5000;
 const STALE_MS     = 2 * 60 * 1000;   // 2 minutes
 
 // ── regex ──────────────────────────────────────────────────────────────────
-const RE_TICK   = /tick\s+symbol=(\S+)\s+close=([\d.]+)\s+sma\d+=([.\d]+)\s+rsi\d+=([\d.]+)\s+state=(\S+)/;
-const RE_SIGNAL = /buy_signal\s+symbol=(\S+)\s+close=([\d.]+)\s+sma\d+=[.\d]+\s+rsi\d+=([\d.]+)/;
-const RE_TS     = /^(\d{4}-\d{2}-\d{2}\s[\d:,]+)/;
-const RE_LEVEL  = /\s(INFO|WARNING|ERROR|DEBUG)\s/;
+const RE_TICK        = /tick\s+symbol=(\S+)\s+close=([\d.]+)\s+sma\d+=([.\d]+)\s+rsi\d+=([\d.]+)\s+state=(\S+)/;
+const RE_SIGNAL      = /buy_signal\s+symbol=(\S+)\s+close=([\d.]+)\s+sma\d+=[.\d]+\s+rsi\d+=([\d.]+)/;
+const RE_TRADE_OPEN  = /paper_trade_open\s+entry_price=([\d.]+)\s+qty=([\d.]+)/;
+const RE_UNREALIZED  = /unrealized_pnl=([-\d.]+)\s+unrealized_pnl_pct=([-\d.]+)/;
+const RE_TRADE_CLOSE = /paper_trade_close/;
+const RE_TS          = /^(\d{4}-\d{2}-\d{2}\s[\d:,]+)/;
+const RE_LEVEL       = /\s(INFO|WARNING|ERROR|DEBUG)\s/;
 
 // ── state ──────────────────────────────────────────────────────────────────
-let lastTickMs  = null;
-let signals     = [];
+let lastTickMs        = null;
+let signals           = [];
+let activePosition    = null;   // { entry, qty }
+let lastClose         = null;
+let lastUnrealizedPnl = null;   // { usdt, pct }
 
 // ── helpers ───────────────────────────────────────────────────────────────
 function el(id) { return document.getElementById(id); }
 
-function fmtPrice(v) {
-  return Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtPrice(v, digits = 2) {
+  return Number(v).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
 function timeSince(ms) {
   const s = Math.floor((Date.now() - ms) / 1000);
-  if (s < 60)  return `${s}s ago`;
+  if (s < 60)   return `${s}s ago`;
   if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s ago`;
   return `${Math.floor(s/3600)}h ago`;
 }
@@ -267,10 +386,10 @@ function renderState(state) {
   const badge = el('state-badge');
   const label = el('state-value');
   const map = {
-    WAITING_SIGNAL:  ['badge-green',  'WAITING SIGNAL'],
-    IN_POSITION:     ['badge-yellow', 'IN POSITION'],
-    ORDER_PENDING:   ['badge-yellow', 'ORDER PENDING'],
-    ERROR_COOLDOWN:  ['badge-red',    'ERROR COOLDOWN'],
+    WAITING_SIGNAL: ['badge-green',  'WAITING SIGNAL'],
+    IN_POSITION:    ['badge-yellow', 'IN POSITION'],
+    ORDER_PENDING:  ['badge-yellow', 'ORDER PENDING'],
+    ERROR_COOLDOWN: ['badge-red',    'ERROR COOLDOWN'],
   };
   const [cls, text] = map[state] || ['badge-gray', state];
   badge.className = `badge ${cls}`;
@@ -280,11 +399,11 @@ function renderState(state) {
 
 // ── render metrics ─────────────────────────────────────────────────────────
 function renderMetrics(close, sma, rsi, state, symbol) {
+  lastClose = parseFloat(close);
   el('m-close').textContent = fmtPrice(close);
   el('m-sma').textContent   = fmtPrice(sma);
   el('m-rsi').textContent   = Number(rsi).toFixed(1);
 
-  // SMA arrow
   const arrow = el('sma-arrow');
   if (close > sma) {
     arrow.textContent = '↑';
@@ -298,7 +417,6 @@ function renderMetrics(close, sma, rsi, state, symbol) {
     el('sma-sub').style.color = 'var(--red)';
   }
 
-  // RSI bar
   const pct  = Math.min(100, Math.max(0, (rsi / 100) * 100));
   const fill = el('rsi-fill');
   fill.style.width = `${pct}%`;
@@ -306,10 +424,13 @@ function renderMetrics(close, sma, rsi, state, symbol) {
   else if (rsi > 70) { fill.style.background = 'var(--red)'; }
   else               { fill.style.background = 'var(--gray)'; }
 
-  // symbol / state
-  const parts = symbol.split('/');
   el('symbol-value').textContent = symbol;
   renderState(state);
+
+  // keep position current price in sync
+  if (activePosition) {
+    el('pos-current').textContent = fmtPrice(close);
+  }
 }
 
 // ── render signals ─────────────────────────────────────────────────────────
@@ -328,6 +449,85 @@ function renderSignals() {
       </div>
     </li>`
   ).join('');
+}
+
+// ── render active position ─────────────────────────────────────────────────
+function renderPosition() {
+  const placeholder = el('pos-placeholder');
+  const content     = el('pos-content');
+
+  if (!activePosition) {
+    placeholder.style.display = 'block';
+    content.style.display     = 'none';
+    return;
+  }
+
+  placeholder.style.display = 'none';
+  content.style.display     = 'block';
+
+  el('pos-entry').textContent   = fmtPrice(activePosition.entry);
+  el('pos-qty').textContent     = Number(activePosition.qty).toFixed(6);
+  if (lastClose !== null) {
+    el('pos-current').textContent = fmtPrice(lastClose);
+  }
+
+  if (lastUnrealizedPnl !== null) {
+    const { usdt, pct } = lastUnrealizedPnl;
+    const pnlEl  = el('pos-pnl-value');
+    const pctEl  = el('pos-pnl-pct');
+    const color  = usdt >= 0 ? 'var(--green)' : 'var(--red)';
+    const sign   = usdt >= 0 ? '+' : '';
+    pnlEl.textContent     = `${sign}${fmtPrice(usdt, 4)} USDT`;
+    pnlEl.style.color     = color;
+    pctEl.textContent     = `${sign}${Number(pct).toFixed(2)}%`;
+    pctEl.style.color     = color;
+  }
+}
+
+// ── render trade history ───────────────────────────────────────────────────
+function renderHistory(trades) {
+  const noHistory  = el('no-history');
+  const table      = el('history-table');
+  const tbody      = el('history-tbody');
+  const summaryRow = el('summary-row');
+
+  if (!trades || trades.length === 0) {
+    noHistory.style.display  = 'block';
+    table.style.display      = 'none';
+    summaryRow.style.display = 'none';
+    return;
+  }
+
+  noHistory.style.display  = 'none';
+  table.style.display      = 'table';
+  summaryRow.style.display = 'flex';
+
+  const last10 = trades.slice(-10).reverse();
+  tbody.innerHTML = last10.map((t, i) => {
+    const cls    = t.result === 'WIN' ? 'trade-win' : 'trade-loss';
+    const sign   = t.pnl_usdt >= 0 ? '+' : '';
+    return `<tr>
+      <td>${trades.length - i}</td>
+      <td>${fmtPrice(t.entry_price)}</td>
+      <td>${fmtPrice(t.exit_price)}</td>
+      <td class="${cls}">${sign}${fmtPrice(t.pnl_usdt, 4)}</td>
+      <td class="${cls}">${sign}${Number(t.pnl_pct).toFixed(2)}%</td>
+      <td class="${cls}">${t.result}</td>
+      <td style="color:var(--gray)">${t.reason}</td>
+    </tr>`;
+  }).join('');
+
+  // summary
+  const wins     = trades.filter(t => t.result === 'WIN').length;
+  const winRate  = trades.length > 0 ? (wins / trades.length * 100).toFixed(1) : '0.0';
+  const totalPnl = trades.reduce((sum, t) => sum + t.pnl_usdt, 0);
+  const sign     = totalPnl >= 0 ? '+' : '';
+  const pnlColor = totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+
+  el('sum-winrate').textContent  = `${winRate}% (${wins}/${trades.length})`;
+  el('sum-count').textContent    = trades.length;
+  el('sum-total-pnl').textContent = `${sign}${fmtPrice(totalPnl, 4)} USDT`;
+  el('sum-total-pnl').style.color = pnlColor;
 }
 
 // ── render log ─────────────────────────────────────────────────────────────
@@ -355,18 +555,18 @@ function renderConnection() {
   const seen  = el('last-seen');
 
   if (!lastTickMs) {
-    dot.style.background   = 'var(--gray)';
-    label.textContent      = 'No data yet';
-    seen.textContent       = 'last tick: —';
+    dot.style.background = 'var(--gray)';
+    label.textContent    = 'No data yet';
+    seen.textContent     = 'last tick: —';
     return;
   }
 
   const age  = Date.now() - lastTickMs;
   const live = age < STALE_MS;
-  dot.style.background  = live ? 'var(--green)' : 'var(--red)';
-  label.textContent     = live ? 'Live' : 'Stale';
-  label.style.color     = live ? 'var(--green)' : 'var(--red)';
-  seen.textContent      = `last tick: ${timeSince(lastTickMs)}`;
+  dot.style.background = live ? 'var(--green)' : 'var(--red)';
+  label.textContent    = live ? 'Live' : 'Stale';
+  label.style.color    = live ? 'var(--green)' : 'var(--red)';
+  seen.textContent     = `last tick: ${timeSince(lastTickMs)}`;
 }
 
 // ── main parse + render ────────────────────────────────────────────────────
@@ -387,17 +587,38 @@ function processLog(text) {
         m[5],              // state
         m[1],              // symbol
       );
-
-      // parse timestamp → Date for connection freshness
       if (tsM) {
         const ts = tsM[1].replace(',', '.');
         lastTickMs = new Date(ts).getTime();
-        // update timeframe display
         const tfMatch = last.match(/timeframe=(\S+)/);
         el('tf-value').textContent = 'timeframe: ' + (tfMatch ? tfMatch[1] : '1m');
       }
     }
   }
+
+  // active position: find last paper_trade_open; reset on paper_trade_close
+  let newPosition = null;
+  lines.forEach(line => {
+    if (RE_TRADE_OPEN.test(line)) {
+      const m = line.match(RE_TRADE_OPEN);
+      if (m) newPosition = { entry: parseFloat(m[1]), qty: parseFloat(m[2]) };
+    }
+    if (RE_TRADE_CLOSE.test(line)) {
+      newPosition = null;
+    }
+  });
+  // only update if changed to avoid flicker
+  const hadPosition = activePosition !== null;
+  const hasPosition = newPosition !== null;
+  activePosition = newPosition;
+
+  // last unrealized PnL
+  const pnlLines = lines.filter(l => RE_UNREALIZED.test(l));
+  if (pnlLines.length > 0) {
+    const m = pnlLines[pnlLines.length - 1].match(RE_UNREALIZED);
+    if (m) lastUnrealizedPnl = { usdt: parseFloat(m[1]), pct: parseFloat(m[2]) };
+  }
+  if (!hasPosition) lastUnrealizedPnl = null;
 
   // buy signals
   const newSignals = [];
@@ -405,19 +626,29 @@ function processLog(text) {
     if (!line.includes('buy_signal')) return;
     const m   = line.match(RE_SIGNAL);
     const tsM = line.match(RE_TS);
-    if (m) newSignals.push({
-      ts:    tsM ? tsM[1] : '',
-      close: m[2],
-      rsi:   m[3],
-    });
+    if (m) newSignals.push({ ts: tsM ? tsM[1] : '', close: m[2], rsi: m[3] });
   });
   if (newSignals.length !== signals.length) {
     signals = newSignals;
     renderSignals();
   }
 
+  renderPosition();
   renderLog(lines);
   renderConnection();
+}
+
+// ── fetch trades_history.json ──────────────────────────────────────────────
+async function pollTrades() {
+  try {
+    const res = await fetch(`${TRADES_URL}?_=${Date.now()}`);
+    if (res.ok) {
+      const trades = await res.json();
+      renderHistory(trades);
+    }
+  } catch (_) {
+    // file may not exist yet
+  }
 }
 
 // ── fetch loop ─────────────────────────────────────────────────────────────
@@ -434,9 +665,11 @@ async function poll() {
 
 // boot
 poll();
+pollTrades();
 setInterval(poll, POLL_MS);
+setInterval(pollTrades, POLL_MS);
 
-// refresh connection indicator every second (for the "Xs ago" timer)
+// refresh connection indicator every second
 setInterval(renderConnection, 1000);
 </script>
 </body>
