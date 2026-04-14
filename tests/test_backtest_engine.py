@@ -37,6 +37,9 @@ from backtest.engine import (
     _SYMBOLS,
     _TP_PCT,
     _WINNER,
+    _WINNER_VOL,
+    _VOL_FACTOR,
+    _VOL_SMA_PERIOD,
     ParamSet,
 )
 from strategy.indicators import rsi, sma
@@ -554,6 +557,58 @@ class TestWinnerConstant(unittest.TestCase):
         self.assertIn('BTC/USDT', _SYMBOLS)
         self.assertIn('ETH/USDT', _SYMBOLS)
         self.assertIn('SOL/USDT', _SYMBOLS)
+
+
+# ---------------------------------------------------------------------------
+# _process_bar_config — volume filter
+# ---------------------------------------------------------------------------
+
+class TestProcessBarConfigVolume(unittest.TestCase):
+
+    def test_entry_blocked_when_volume_below_factor(self):
+        # vol=110 < sma=100 × 1.2 → no entry even though RSI/SMA conditions are met
+        new_pos, _, trade = _process_bar_config(
+            105.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT,
+            volume_val=110.0, volume_sma_val=100.0, volume_factor=1.2,
+        )
+        self.assertIsNone(new_pos)
+        self.assertIsNone(trade)
+
+    def test_entry_allowed_when_volume_above_factor(self):
+        # vol=150 > sma=100 × 1.2 → entry fires
+        new_pos, _, trade = _process_bar_config(
+            105.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT,
+            volume_val=150.0, volume_sma_val=100.0, volume_factor=1.2,
+        )
+        self.assertIsNotNone(new_pos)
+        self.assertIsNone(trade)
+
+    def test_volume_factor_none_disables_volume_check(self):
+        # volume_factor=None → volume args are ignored → entry fires on RSI/SMA only
+        new_pos, _, _ = _process_bar_config(
+            105.0, 100.0, 30.0, 1000, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT,
+            volume_val=10.0, volume_sma_val=100.0, volume_factor=None,
+        )
+        self.assertIsNotNone(new_pos)
+
+
+# ---------------------------------------------------------------------------
+# _WINNER_VOL sanity
+# ---------------------------------------------------------------------------
+
+class TestWinnerVolConstant(unittest.TestCase):
+
+    def test_winner_vol_has_volume_factor(self):
+        self.assertAlmostEqual(_WINNER_VOL.volume_factor, _VOL_FACTOR)
+
+    def test_winner_vol_shares_sltp_with_winner(self):
+        self.assertAlmostEqual(_WINNER_VOL.sl_pct, _WINNER.sl_pct)
+        self.assertAlmostEqual(_WINNER_VOL.tp_pct, _WINNER.tp_pct)
+        self.assertAlmostEqual(_WINNER_VOL.rsi_threshold, _WINNER.rsi_threshold)
+        self.assertEqual(_WINNER_VOL.sma_period, _WINNER.sma_period)
+
+    def test_winner_vol_strategy_is_rsi_sma(self):
+        self.assertEqual(_WINNER_VOL.strategy, 'rsi_sma')
 
 
 if __name__ == '__main__':

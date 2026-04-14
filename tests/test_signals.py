@@ -147,5 +147,51 @@ class TestShouldEnterMeanRev(unittest.TestCase):
         self.assertFalse(should_enter_mean_rev(-0.02, threshold=0.025))
 
 
+# ---------------------------------------------------------------------------
+# should_enter — volume confirmation
+# ---------------------------------------------------------------------------
+
+class TestShouldEnterWithVolume(unittest.TestCase):
+
+    def test_volume_confirms_entry(self):
+        # vol=150 > sma20=100 × 1.2 → entry allowed
+        self.assertTrue(should_enter(
+            close=105.0, sma20=100.0, rsi14=30.0,
+            volume=150.0, volume_sma20=100.0, volume_factor=1.2,
+        ))
+
+    def test_volume_blocks_entry_when_too_low(self):
+        # vol=110 < sma20=100 × 1.2 → blocked
+        self.assertFalse(should_enter(
+            close=105.0, sma20=100.0, rsi14=30.0,
+            volume=110.0, volume_sma20=100.0, volume_factor=1.2,
+        ))
+
+    def test_volume_boundary_exact_factor_returns_false(self):
+        # vol == sma20 * factor is NOT > so blocked
+        self.assertFalse(should_enter(
+            close=105.0, sma20=100.0, rsi14=30.0,
+            volume=120.0, volume_sma20=100.0, volume_factor=1.2,
+        ))
+
+    def test_volume_none_skips_volume_check(self):
+        # no volume args → volume filter inactive
+        self.assertTrue(should_enter(close=105.0, sma20=100.0, rsi14=30.0))
+
+    def test_volume_sma_none_skips_volume_check(self):
+        # volume provided but volume_sma20=None → filter inactive
+        self.assertTrue(should_enter(
+            close=105.0, sma20=100.0, rsi14=30.0,
+            volume=50.0, volume_sma20=None, volume_factor=1.2,
+        ))
+
+    def test_volume_does_not_override_rsi_block(self):
+        # rsi above threshold → blocked regardless of volume
+        self.assertFalse(should_enter(
+            close=105.0, sma20=100.0, rsi14=40.0,
+            volume=200.0, volume_sma20=100.0, volume_factor=1.2,
+        ))
+
+
 if __name__ == '__main__':
     unittest.main()

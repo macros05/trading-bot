@@ -23,7 +23,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import BOT_CONFIG
-from strategy.indicators import rsi, sma
+from strategy.indicators import rsi, sma, volume_sma
 from strategy.signals import calc_pnl, check_exit, should_enter_mean_rev
 
 logging.basicConfig(
@@ -50,7 +50,10 @@ _MULTI_FILE    = _RESULTS_DIR / 'multi_report.json'
 _SLTP_FILE     = _RESULTS_DIR / 'sltp_report.json'
 _SYMBOL_FILE        = _RESULTS_DIR / 'symbol_report.json'
 _STRATEGY_COMP_FILE = _RESULTS_DIR / 'strategy_comp_report.json'
+_VOL_COMP_FILE      = _RESULTS_DIR / 'volume_comp_report.json'
 _SYMBOLS            = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
+_VOL_SMA_PERIOD     = 20
+_VOL_FACTOR         = 1.2
 
 
 # ── parameter set ──────────────────────────────────────────────────────────
@@ -62,9 +65,10 @@ class ParamSet:
     sma_period:    int | None   # None = no SMA filter
     sl_pct:        float = field(default=0.02)
     tp_pct:        float = field(default=0.03)
-    strategy:      str   = field(default='rsi_sma')  # 'rsi_sma' | 'mean_rev'
-    drop_pct:      float = field(default=0.015)       # mean_rev: entry drop threshold
-    lookback:      int   = field(default=10)          # mean_rev: bars to measure drop
+    strategy:      str          = field(default='rsi_sma')  # 'rsi_sma' | 'mean_rev' | 'combined'
+    drop_pct:      float        = field(default=0.015)      # mean_rev: entry drop threshold
+    lookback:      int          = field(default=10)         # mean_rev: bars to measure drop
+    volume_factor: float | None = field(default=None)       # None = no volume filter; e.g. 1.2
 
 
 # ── sweep 1: entry-condition combinations (SL/TP fixed from config) ────────
@@ -117,6 +121,17 @@ _COMBINED = ParamSet(
     strategy='combined',
     drop_pct=0.01,    # 1% drop over lookback bars
     lookback=10,
+)
+
+# ── sweep 6: volume confirmation ───────────────────────────────────────────
+
+_WINNER_VOL = ParamSet(
+    label=f'RSI<40+SMA20+Vol>{_VOL_FACTOR}x',
+    rsi_threshold=40.0,
+    sma_period=20,
+    sl_pct=0.025,
+    tp_pct=0.040,
+    volume_factor=_VOL_FACTOR,
 )
 
 
@@ -201,13 +216,18 @@ def _process_bar_config(
     rsi_threshold: float,
     sl_pct: float,
     tp_pct: float,
+    volume_val: float | None = None,
+    volume_sma_val: float | None = None,
+    volume_factor: float | None = None,
 ) -> tuple[dict | None, float, dict | None]:
     """Return (new_position, new_balance, closed_trade_or_None).
-    sma_val=None disables the SMA filter (entry on RSI alone)."""
+    sma_val=None disables the SMA filter. volume_factor=None disables volume filter."""
     if position is None:
         rsi_ok = rsi_val < rsi_threshold
         sma_ok = sma_val is None or close > sma_val
-        if rsi_ok and sma_ok:
+        vol_ok = (volume_factor is None or volume_val is None or volume_sma_val is None
+                  or volume_val > volume_sma_val * volume_factor)
+        if rsi_ok and sma_ok and vol_ok:
             qty = (balance * _RISK_PCT) / close
             return {'entry_price': close, 'qty': qty, 'entry_ts': ts}, balance, None
         return None, balance, None
@@ -227,6 +247,8 @@ def _simulate_config(
     min_candles: int,
     sl_pct: float,
     tp_pct: float,
+    vol_sma_s: pd.Series | None = None,
+    volume_factor: float | None = None,
 ) -> tuple[list[dict], list[float]]:
     balance  = _BALANCE
     trades:   list[dict]  = []
@@ -239,9 +261,13 @@ def _simulate_config(
         sma_val = float(sma_s.iloc[i]) if sma_s is not None else None
         if pd.isna(rsi_val) or (sma_val is not None and pd.isna(sma_val)):
             continue
+        vol_sma_val = float(vol_sma_s.iloc[i]) if vol_sma_s is not None else None
         position, balance, trade = _process_bar_config(
             close, sma_val, rsi_val, int(df['ts'].iloc[i]),
             position, balance, rsi_threshold, sl_pct, tp_pct,
+            float(df['volume'].iloc[i]) if vol_sma_s is not None else None,
+            vol_sma_val,
+            volume_factor,
         )
         if trade:
             trades.append(trade)
@@ -456,8 +482,10 @@ def _run_simulation(
     if params.strategy == 'combined':
         return _simulate_combined(df, rsi_s, sma_s, params)
     min_c = max(_RSI_PERIOD, params.sma_period or 0)
+    vol_sma_s = volume_sma(df, _VOL_SMA_PERIOD) if params.volume_factor is not None else None
     return _simulate_config(
         df, rsi_s, sma_s, params.rsi_threshold, min_c, params.sl_pct, params.tp_pct,
+        vol_sma_s, params.volume_factor,
     )
 
 
@@ -671,6 +699,13 @@ def run() -> None:
     _report_sweep(
         _run_param_sweep(df, [_WINNER, _MEAN_REV, _COMBINED]), period,
         _STRATEGY_COMP_FILE, 'STRATEGY COMPARISON  BTC/USDT', comp_sub,
+    )
+    logger.info('running volume confirmation comparison...')
+    vol_sub = (f'Risk={_RISK_PCT*100:.1f}%  Balance={_BALANCE:.0f} USDT  |  '
+               f'Both SL2.5%/TP4.0%  |  Vol filter={_VOL_FACTOR}x vol_sma{_VOL_SMA_PERIOD}')
+    _report_sweep(
+        _run_param_sweep(df, [_WINNER, _WINNER_VOL]), period,
+        _VOL_COMP_FILE, 'VOLUME CONFIRMATION  BTC/USDT', vol_sub,
     )
 
 

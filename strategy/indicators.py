@@ -18,6 +18,11 @@ def ema(df: pd.DataFrame, period: int) -> pd.Series:
     return df['close'].ewm(span=period, adjust=False, min_periods=period).mean()
 
 
+def volume_sma(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    """Simple moving average of the 'volume' column over *period* bars."""
+    return df['volume'].rolling(window=period, min_periods=period).mean()
+
+
 def rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """Relative Strength Index of the 'close' column over *period* bars.
 

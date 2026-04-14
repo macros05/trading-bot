@@ -6,9 +6,21 @@ def should_enter(
     sma20: float,
     rsi14: float,
     rsi_threshold: float = 35.0,
+    volume: float | None = None,
+    volume_sma20: float | None = None,
+    volume_factor: float = 1.2,
 ) -> bool:
-    """Return True when the entry conditions are met."""
-    return rsi14 < rsi_threshold and close > sma20
+    """Return True when all active entry conditions are met.
+
+    Volume confirmation is optional: only applied when both *volume* and
+    *volume_sma20* are provided. Requires volume > volume_sma20 * volume_factor.
+    """
+    if rsi14 >= rsi_threshold or close <= sma20:
+        return False
+    if volume is not None and volume_sma20 is not None:
+        if volume <= volume_sma20 * volume_factor:
+            return False
+    return True
 
 
 def check_exit(

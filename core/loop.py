@@ -12,14 +12,15 @@ from core.state import BotState, StateManager
 from data.candles import CandleBuffer
 from exchange.client import BinanceClient
 from risk.manager import RiskManager
-from strategy.indicators import rsi, sma
+from strategy.indicators import rsi, sma, volume_sma
 from strategy.signals import calc_pnl, check_exit, should_enter
 
 logger = logging.getLogger(__name__)
 
 _SMA_PERIOD = 20
 _RSI_PERIOD = 14
-_MIN_CANDLES = max(_SMA_PERIOD, _RSI_PERIOD)
+_VOL_SMA_PERIOD = 20
+_MIN_CANDLES = max(_SMA_PERIOD, _RSI_PERIOD, _VOL_SMA_PERIOD)
 _TRADES_FILE = Path('trades_history.json')
 
 
@@ -165,18 +166,24 @@ async def trading_loop(
             continue
 
         df = buffer.to_dataframe()
-        current_close: float = float(df['close'].iloc[-1])
-        current_sma: float   = float(sma(df, period=_SMA_PERIOD).iloc[-1])
-        current_rsi: float   = float(rsi(df, period=_RSI_PERIOD).iloc[-1])
-        bot_state            = state_manager.get_state()
+        current_close: float  = float(df['close'].iloc[-1])
+        current_sma: float    = float(sma(df, period=_SMA_PERIOD).iloc[-1])
+        current_rsi: float    = float(rsi(df, period=_RSI_PERIOD).iloc[-1])
+        current_volume: float = float(df['volume'].iloc[-1])
+        vol_sma20: float      = float(volume_sma(df, period=_VOL_SMA_PERIOD).iloc[-1])
+        bot_state             = state_manager.get_state()
 
         logger.info(
-            'tick symbol=%s close=%.2f sma%d=%.2f rsi%d=%.1f state=%s',
+            'tick symbol=%s close=%.2f sma%d=%.2f rsi%d=%.1f vol_ratio=%.2f state=%s',
             symbol, current_close, _SMA_PERIOD, current_sma,
-            _RSI_PERIOD, current_rsi, bot_state.value,
+            _RSI_PERIOD, current_rsi,
+            current_volume / vol_sma20 if vol_sma20 > 0 else 0.0,
+            bot_state.value,
         )
 
         if bot_state == BotState.WAITING_SIGNAL:
+            # Volume filter (1.2× vol_sma20) was tested and discarded:
+            # collapsed 10 → 1 entry over 90 days, Sharpe 0.19 → 0.00.
             if should_enter(current_close, current_sma, current_rsi, rsi_threshold=35.0):
                 logger.info(
                     'buy_signal symbol=%s close=%.4f sma%d=%.4f rsi%d=%.2f',
