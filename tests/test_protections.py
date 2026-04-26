@@ -75,5 +75,41 @@ class TestStoplossGuard(unittest.TestCase):
         self.assertFalse(blocked)
 
 
+class TestProtectionStack(unittest.TestCase):
+    def test_empty_stack_never_blocks(self):
+        from risk.protections import ProtectionStack
+        stack = ProtectionStack([])
+        blocked, _ = stack.is_blocked(now_ms=0, trades_history=[])
+        self.assertFalse(blocked)
+
+    def test_short_circuits_on_first_block(self):
+        from risk.protections import ProtectionStack
+
+        class _AlwaysBlocks:
+            def __init__(self, name): self.name = name
+            def is_blocked(self, now_ms, trades_history):
+                return True, f'block from {self.name}'
+
+        class _NeverBlocks:
+            def is_blocked(self, now_ms, trades_history):
+                raise AssertionError('should not be called')
+
+        stack = ProtectionStack([_AlwaysBlocks('first'), _NeverBlocks()])
+        blocked, reason = stack.is_blocked(now_ms=0, trades_history=[])
+        self.assertTrue(blocked)
+        self.assertEqual(reason, 'block from first')
+
+    def test_passes_when_all_protections_allow(self):
+        from risk.protections import ProtectionStack
+
+        class _NeverBlocks:
+            def is_blocked(self, now_ms, trades_history):
+                return False, None
+
+        stack = ProtectionStack([_NeverBlocks(), _NeverBlocks()])
+        blocked, _ = stack.is_blocked(now_ms=0, trades_history=[])
+        self.assertFalse(blocked)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -78,3 +78,23 @@ class StoplossGuard:
         if sl_count >= self._max_sl:
             return True, f'stoploss_guard: {sl_count} SL hits in last {self._lookback_ms // 1000}s'
         return False, None
+
+
+class ProtectionStack:
+    """Compose multiple protections; short-circuits on the first block.
+
+    The stack is evaluated in declaration order. The first protection that
+    returns blocked=True wins; subsequent protections are not consulted.
+    """
+
+    def __init__(self, protections: list[Protection]) -> None:
+        self._protections = list(protections)
+
+    def is_blocked(
+        self, now_ms: int, trades_history: list[dict],
+    ) -> tuple[bool, str | None]:
+        for protection in self._protections:
+            blocked, reason = protection.is_blocked(now_ms, trades_history)
+            if blocked:
+                return True, reason
+        return False, None
