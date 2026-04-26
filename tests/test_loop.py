@@ -604,5 +604,57 @@ class TestSideAwareExit(unittest.IsolatedAsyncioTestCase):
             self.assertLess(rm.get_daily_pnl(), 0)
 
 
+# ---------------------------------------------------------------------------
+# ProtectionStack integration
+# ---------------------------------------------------------------------------
+
+class TestProtectionsIntegration(unittest.IsolatedAsyncioTestCase):
+    async def test_blocked_protection_skips_signal_evaluation(self):
+        """When protections.is_blocked() returns True, _process_tick is skipped."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+        from core.loop import trading_loop
+        from core.state import StateManager, BotState
+        from data.candles import CandleBuffer
+        from risk.manager import RiskManager
+        from risk.protections import ProtectionStack
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=1)
+            buf = CandleBuffer(maxlen=200)
+
+            class _AlwaysBlock:
+                def is_blocked(self, now_ms, trades_history):
+                    return True, 'test block'
+
+            stack = ProtectionStack([_AlwaysBlock()])
+
+            cfg = {
+                'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+                'limit': 200, 'paper_balance': 10_000.0,
+                'risk_pct': 0.02,
+                'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+                'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+                'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 1,
+            }
+
+            client = MagicMock()
+
+            async def _capture(symbol, timeframe, callback, **kwargs):
+                await callback([{'ts': 0, 'open': 100, 'high': 101, 'low': 99,
+                                 'close': 100, 'volume': 1.0}])
+            client.watch_candles = _capture
+
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'), \
+                 patch('core.loop._HEALTH_FILE', tmpdir / 'health.json'):
+                await trading_loop(client, buf, sm, rm, cfg, protections=stack)
+            # Position should never have been opened
+            self.assertEqual(sm.get_state(), BotState.WAITING_SIGNAL)
+            self.assertIsNone(sm.get_position())
+
+
 if __name__ == '__main__':
     unittest.main()

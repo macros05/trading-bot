@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from core.macro_filter import MacroFilter, NO_TRADE
+from risk.protections import ProtectionStack
 from core.state import BotState, StateManager
 from data.candles import CandleBuffer
 from exchange.client import BinanceClient
@@ -486,6 +487,7 @@ async def trading_loop(
     risk_manager: RiskManager,
     config: dict[str, Any],
     macro_filter: MacroFilter | None = None,
+    protections: ProtectionStack | None = None,
 ) -> None:
     """Main trading loop. Streams candles via WebSocket; falls back to REST polling.
 
@@ -535,6 +537,12 @@ async def trading_loop(
         macro_mode = None
         if macro_filter is not None:
             macro_mode = await macro_filter.get_mode()
+        if protections is not None:
+            now_ms = int(time.time() * 1000)
+            blocked, reason = protections.is_blocked(now_ms, _load_trades())
+            if blocked:
+                logger.info('protections_blocked reason=%s', reason)
+                return
         await _process_tick(buffer, state_manager, risk_manager, cfg, candles,
                             macro_mode=macro_mode)
 
