@@ -70,11 +70,13 @@ class TestInitWithValidFile(unittest.TestCase):
             self.assertEqual(manager.get_state(), BotState.IN_POSITION)
 
     def test_loads_position_from_disk(self):
+        # Position stored without `side` (legacy shape); backfill injects side='long'.
         position = {'symbol': 'BTC/USDT', 'entry_price': 30000.0, 'qty': 0.01}
         with tempfile.TemporaryDirectory() as tmp:
             self._write(tmp, {'state': 'IN_POSITION', 'position': position})
             manager = _manager(tmp)
-            self.assertEqual(manager.get_position(), position)
+            expected = {**position, 'side': 'long'}
+            self.assertEqual(manager.get_position(), expected)
 
     def test_all_states_round_trip(self):
         for state in BotState:
@@ -179,12 +181,70 @@ class TestPosition(unittest.TestCase):
 
     def test_reloaded_manager_sees_position(self):
         with tempfile.TemporaryDirectory() as tmp:
+            # set_position stores whatever dict is passed; a dict without `side`
+            # will have side='long' backfilled on the next load from disk.
             pos = {'symbol': 'BTC/USDT', 'entry_price': 30000.0}
             m1 = _manager(tmp)
             m1.set_state(BotState.IN_POSITION)
             m1.set_position(pos)
             m2 = _manager(tmp)
-            self.assertEqual(m2.get_position(), pos)
+            self.assertEqual(m2.get_position(), {**pos, 'side': 'long'})
+
+
+class TestPositionSideField(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self._tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        self._tmp.close()
+        from pathlib import Path
+        self._path = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._path.unlink(missing_ok=True)
+
+    def test_legacy_position_loads_with_side_long(self):
+        """A bot_state.json without `side` is treated as a long position."""
+        import json
+        from core.state import StateManager
+        legacy = {
+            'state': 'IN_POSITION',
+            'position': {'entry_price': 100.0, 'qty': 0.1, 'ts': 1700000000000},
+        }
+        self._path.write_text(json.dumps(legacy))
+        sm = StateManager(state_file=self._path)
+        pos = sm.get_position()
+        self.assertEqual(pos.get('side'), 'long')
+
+    def test_short_position_roundtrip(self):
+        from core.state import StateManager, BotState
+        sm = StateManager(state_file=self._path)
+        sm.set_position({'side': 'short', 'entry_price': 100.0, 'qty': 0.1,
+                         'ts': 1700000000000, 'sl_price': 103.5, 'tp_price': 94.0})
+        sm.set_state(BotState.IN_POSITION)
+        sm2 = StateManager(state_file=self._path)
+        self.assertEqual(sm2.get_position().get('side'), 'short')
+
+    def test_set_position_none_clears(self):
+        from core.state import StateManager
+        sm = StateManager(state_file=self._path)
+        sm.set_position({'side': 'short', 'entry_price': 100.0, 'qty': 0.1, 'ts': 1})
+        sm.set_position(None)
+        self.assertIsNone(sm.get_position())
+
+    def test_existing_long_position_with_side_field_loads_intact(self):
+        """If a state file already has side='long', it must round-trip without modification."""
+        import json
+        from core.state import StateManager
+        with_side = {
+            'state': 'IN_POSITION',
+            'position': {'side': 'long', 'entry_price': 50.0, 'qty': 0.5,
+                         'ts': 1700000000000, 'sl_price': 48.75, 'tp_price': 52.0},
+        }
+        self._path.write_text(json.dumps(with_side))
+        sm = StateManager(state_file=self._path)
+        pos = sm.get_position()
+        self.assertEqual(pos.get('side'), 'long')
+        self.assertEqual(pos.get('entry_price'), 50.0)
 
 
 if __name__ == '__main__':
