@@ -28,14 +28,24 @@ from data.candles import CandleBuffer
 
 def _config() -> dict:
     return {
-        'symbol':           'BTC/USDT',
-        'timeframe':        '1m',
-        'limit':            200,
-        'interval_seconds': 60,
-        'paper_balance':    10_000.0,
-        'risk_pct':         0.01,
-        'stop_loss_pct':    0.02,
-        'take_profit_pct':  0.03,
+        'symbol':                 'BTC/USDT',
+        'timeframe':              '1m',
+        'limit':                  200,
+        'interval_seconds':       60,
+        'paper_balance':          10_000.0,
+        'risk_pct':               0.01,
+        'stop_loss_pct_long':     0.02,
+        'take_profit_pct_long':   0.03,
+        'stop_loss_pct_short':    0.035,
+        'take_profit_pct_short':  0.060,
+        'rsi_threshold':          40.0,
+        'rsi_short_threshold':    55.0,
+        # Keep the legacy test suite focused on WAITING/IN_POSITION transitions;
+        # trailing stop, ATR exits and regime filters have their own tests.
+        'use_atr_exits':          False,
+        'use_trailing_stop':      False,
+        'use_adx_filter':         False,
+        'use_trend_filter':       False,
     }
 
 
@@ -229,7 +239,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
     async def test_logs_unrealized_pnl_each_tick(self):
         state_manager = _mock_state(BotState.IN_POSITION, position=self._position(100.0, 1.0))
 
-        with patch('core.loop.check_exit', return_value=None), \
+        with patch('core.loop.check_exit_price', return_value=None), \
              patch('core.loop.logger') as mock_logger:
             await _run_one_tick(
                 _mock_client(_candles(25, close=101.0)),
@@ -244,7 +254,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
         risk = _mock_risk()
 
-        with patch('core.loop.check_exit', return_value='stop_loss'), \
+        with patch('core.loop.check_exit_price', return_value='stop_loss'), \
              patch('core.loop._save_trade') as mock_save:
             await _run_one_tick(
                 _mock_client(_candles(25, close=97.0)),
@@ -261,7 +271,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
         risk = _mock_risk()
 
-        with patch('core.loop.check_exit', return_value='take_profit'), \
+        with patch('core.loop.check_exit_price', return_value='take_profit'), \
              patch('core.loop._save_trade') as mock_save:
             await _run_one_tick(
                 _mock_client(_candles(25, close=104.0)),
@@ -279,7 +289,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
         risk = _mock_risk()
 
-        with patch('core.loop.check_exit', return_value='take_profit'), \
+        with patch('core.loop.check_exit_price', return_value='take_profit'), \
              patch('core.loop.calc_pnl', return_value=(3.0, 3.0)), \
              patch('core.loop._save_trade'):
             await _run_one_tick(
@@ -294,7 +304,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         position = self._position()
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
 
-        with patch('core.loop.check_exit', return_value=None):
+        with patch('core.loop.check_exit_price', return_value=None):
             await _run_one_tick(
                 _mock_client(_candles(25, close=101.0)),
                 CandleBuffer(), state_manager, _mock_risk(),
