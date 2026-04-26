@@ -633,6 +633,7 @@ class TestSimulateTick(unittest.TestCase):
         result = simulate_tick(close=104.0, state=state)
         self.assertEqual(result['exit_reason'], 'stop_loss')
         self.assertLess(result['pnl_usdt'], 0)
+        self.assertAlmostEqual(result['pnl_usdt'], -4.0, places=6)  # (100 - 104) * 1
 
     def test_simulate_tick_long_unchanged(self):
         """Long behavior identical to pre-refactor."""
@@ -641,6 +642,15 @@ class TestSimulateTick(unittest.TestCase):
         self.assertEqual(simulate_tick(close=104.5, state=state)['exit_reason'], 'take_profit')
         self.assertEqual(simulate_tick(close=97.0,  state=state)['exit_reason'], 'stop_loss')
         self.assertIsNone(simulate_tick(close=101.0, state=state)['exit_reason'])
+
+    def test_simulate_tick_invalid_side_raises(self):
+        from backtest.engine import simulate_tick
+        with self.assertRaises(ValueError):
+            simulate_tick(
+                close=100.0,
+                state={'side': 'both', 'entry_price': 100.0, 'qty': 1.0,
+                       'sl_pct': 0.03, 'tp_pct': 0.05},
+            )
 
 
 if __name__ == '__main__':
