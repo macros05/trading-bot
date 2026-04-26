@@ -35,6 +35,7 @@ class TestShortValidationScript(unittest.TestCase):
         self.assertIn('combined', results)
         for cfg_name, cfg in results.items():
             self.assertIn('trades', cfg)
+            self.assertIn('win_rate', cfg)
             self.assertIn('pnl_usdt', cfg)
             self.assertIn('sharpe', cfg)
 
