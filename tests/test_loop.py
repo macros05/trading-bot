@@ -362,13 +362,20 @@ class TestMisc(unittest.IsolatedAsyncioTestCase):
 class TestMacroFilterGate(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_trade_does_not_evaluate_signals(self):
-        """When macro mode is NO_TRADE, callback returns early — no state access."""
+        """When macro mode is NO_TRADE, the tick still runs but long signals are blocked.
+
+        NO_TRADE now passes macro_mode into _handle_waiting_signal rather than
+        short-circuiting the entire tick — shorts are still allowed (spec §4).
+        """
         state_manager = _mock_state()
-        await _run_one_tick(
-            _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
-            macro_filter=_mock_macro_filter(NO_TRADE),
-        )
-        state_manager.get_state.assert_not_called()
+        with patch('core.loop.should_enter', return_value=False), \
+             patch('core.loop.should_enter_short', return_value=False):
+            await _run_one_tick(
+                _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
+                macro_filter=_mock_macro_filter(NO_TRADE),
+            )
+        # get_state IS called now — tick runs fully, macro_mode blocks long entry
+        state_manager.get_state.assert_called_once()
 
     async def test_normal_mode_evaluates_signals(self):
         """NORMAL macro mode proceeds to signal evaluation."""
@@ -469,6 +476,70 @@ class TestDualDirectionSignals(unittest.IsolatedAsyncioTestCase):
         )
         sm.set_position.assert_not_called()
         self.assertIsNone(notif)
+
+
+# ---------------------------------------------------------------------------
+# Macro filter side asymmetry
+# ---------------------------------------------------------------------------
+
+class TestMacroFilterSideAsymmetry(unittest.IsolatedAsyncioTestCase):
+    """Per spec §4: NO_TRADE blocks longs only; shorts proceed."""
+
+    async def test_macro_no_trade_blocks_long_signal(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        from core.macro_filter import NO_TRADE
+
+        cfg_dict = {
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 1,
+        }
+        from core.loop import _parse_config
+        cfg = _parse_config(cfg_dict)
+
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+
+        # Long signal: close=101, sma=100, rsi=30 → would fire long
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=101.0, sma_val=100.0, rsi_val=30.0,
+            atr_val=None, adx_val=None, macro_mode=NO_TRADE,
+        )
+        # Long should be blocked by NO_TRADE
+        sm.set_position.assert_not_called()
+        self.assertIsNone(notif)
+
+    async def test_macro_no_trade_allows_short_signal(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        from core.macro_filter import NO_TRADE
+
+        from core.loop import _parse_config
+        cfg = _parse_config({
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 1,
+        })
+
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+
+        # Short signal: close=99, sma=100, rsi=70 → short fires
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=99.0, sma_val=100.0, rsi_val=70.0,
+            atr_val=None, adx_val=None, macro_mode=NO_TRADE,
+        )
+        # Short should still open despite NO_TRADE
+        sm.set_position.assert_called_once()
+        opened = sm.set_position.call_args[0][0]
+        self.assertEqual(opened['side'], 'short')
 
 
 if __name__ == '__main__':

@@ -434,6 +434,7 @@ async def _process_tick(
     risk_manager: RiskManager,
     cfg: _LoopConfig,
     candles: list[dict[str, Any]],
+    macro_mode: str | None = None,
 ) -> None:
     buffer.add_many(candles)
     if not buffer.is_ready(_MIN_CANDLES):
@@ -452,6 +453,7 @@ async def _process_tick(
     if bot_state == BotState.WAITING_SIGNAL:
         notification = _handle_waiting_signal(
             state_manager, risk_manager, cfg, close, sma_v, rsi_v, atr_v, adx_v,
+            macro_mode=macro_mode,
         )
     elif bot_state == BotState.IN_POSITION:
         notification = _handle_in_position(state_manager, risk_manager, cfg, close, atr_v)
@@ -515,12 +517,11 @@ async def trading_loop(
                 )
             return
         _circuit_breaker_notified = False
+        macro_mode = None
         if macro_filter is not None:
-            mode = await macro_filter.get_mode()
-            if mode == NO_TRADE:
-                logger.info('macro_mode=NO_TRADE skipping_signal_evaluation')
-                return
-        await _process_tick(buffer, state_manager, risk_manager, cfg, candles)
+            macro_mode = await macro_filter.get_mode()
+        await _process_tick(buffer, state_manager, risk_manager, cfg, candles,
+                            macro_mode=macro_mode)
 
     await client.watch_candles(
         cfg.symbol, cfg.timeframe, _on_candles,
