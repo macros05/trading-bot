@@ -42,6 +42,7 @@ from backtest.engine import (
     _VOL_SMA_PERIOD,
     ParamSet,
 )
+from config import RISK_PCT
 from strategy.indicators import rsi, sma
 
 
@@ -170,7 +171,7 @@ class TestProcessBarConfigEntry(unittest.TestCase):
 
     def test_qty_equals_risk_fraction_of_balance_divided_by_close(self):
         new_pos, _, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
-        expected_qty = (_BALANCE * 0.01) / 100.0   # _RISK_PCT = 0.01
+        expected_qty = (_BALANCE * RISK_PCT) / 100.0
         self.assertAlmostEqual(new_pos['qty'], expected_qty, places=6)
 
     def test_balance_is_unchanged_on_entry(self):
