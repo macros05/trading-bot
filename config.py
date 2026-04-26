@@ -5,10 +5,15 @@ below are the canonical source and are imported directly by backtest / sizing
 code. Keep both in sync.
 """
 
-# ── Risk & sizing (AGGRESSIVE PROFILE — see docs/superpowers/specs/2026-04-26-short-positions-design.md)
+# ── Risk & sizing (v3 ASYMMETRIC PROFILE — see docs/superpowers/specs/2026-04-26-short-positions-design.md)
 RISK_PCT = 0.02            # was 0.01
-STOP_LOSS_PCT = 0.035      # was 0.02
-TAKE_PROFIT_PCT = 0.060    # was 0.03
+
+# Per-side SL/TP: long uses validated conservative values; short uses aggressive values
+# because the short direction has fewer backtested samples and needs a wider buffer.
+STOP_LOSS_PCT_LONG = 0.025   # validated value (original 90-day backtest, Sharpe +0.187)
+STOP_LOSS_PCT_SHORT = 0.035  # aggressive — looser SL for less-validated direction
+TAKE_PROFIT_PCT_LONG = 0.040  # validated value (original 90-day backtest, Sharpe +0.187)
+TAKE_PROFIT_PCT_SHORT = 0.060  # aggressive — wider TP to compensate for looser SL
 
 # ── Leverage (futures only) ──────────────────────────────────────────────────
 LEVERAGE = 2               # new — applied at init via exchange.set_leverage()
@@ -36,7 +41,7 @@ USE_TRAILING_STOP = False
 CIRCUIT_BREAKER_PCT = 0.05 # was 0.03
 
 # ── Signal thresholds ────────────────────────────────────────────────────────
-RSI_LONG_THRESHOLD = 45.0  # was 35.0 (loop hardcoded; config had no constant)
+RSI_LONG_THRESHOLD = 40.0  # back to validated conservative (was 45.0 in v2 aggressive; v3 long side reverts)
 RSI_SHORT_THRESHOLD = 55.0 # new — short mirror
 
 # ── Protections (permissive aggressive defaults — framework present, not active)
@@ -57,8 +62,10 @@ BOT_CONFIG = {
     'risk_pct':             RISK_PCT,
     'rsi_threshold':        RSI_LONG_THRESHOLD,
     'rsi_short_threshold':  RSI_SHORT_THRESHOLD,
-    'stop_loss_pct':        STOP_LOSS_PCT,
-    'take_profit_pct':      TAKE_PROFIT_PCT,
+    'stop_loss_pct_long':   STOP_LOSS_PCT_LONG,
+    'stop_loss_pct_short':  STOP_LOSS_PCT_SHORT,
+    'take_profit_pct_long': TAKE_PROFIT_PCT_LONG,
+    'take_profit_pct_short': TAKE_PROFIT_PCT_SHORT,
     'circuit_breaker_pct':  CIRCUIT_BREAKER_PCT,
     'leverage':             LEVERAGE,
     'cooldown_seconds':     COOLDOWN_SECONDS,
