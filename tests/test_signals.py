@@ -298,5 +298,52 @@ class TestCheckExitShort(unittest.TestCase):
                                            stop_loss_pct=0.035, take_profit_pct=0.06))
 
 
+class TestUpdateTrailingStopShort(unittest.TestCase):
+    def test_no_change_below_50pct_progress(self):
+        from strategy.signals import update_trailing_stop_short
+        # entry=100, tp=90, sl=110. close=98 → progress=(100-98)/(100-90)=0.20
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=90.0, close=98.0, atr_val=1.0),
+            110.0,
+        )
+
+    def test_moves_to_breakeven_at_50pct(self):
+        from strategy.signals import update_trailing_stop_short
+        # close=95 → progress=0.50 → SL moves to entry=100
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=90.0, close=95.0, atr_val=1.0),
+            100.0,
+        )
+
+    def test_trails_at_75pct(self):
+        from strategy.signals import update_trailing_stop_short
+        # close=92.5 → progress=0.75 → SL = close + atr = 92.5 + 1 = 93.5
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=90.0, close=92.5, atr_val=1.0),
+            93.5,
+        )
+
+    def test_sl_only_moves_down_for_shorts(self):
+        from strategy.signals import update_trailing_stop_short
+        # SL already at 95; new candidate at 100 should NOT raise it
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=95.0, entry_price=100.0,
+                                       tp_price=90.0, close=95.0, atr_val=1.0),
+            95.0,
+        )
+
+    def test_invalid_setup_returns_unchanged(self):
+        from strategy.signals import update_trailing_stop_short
+        # tp >= entry is invalid for a short
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=100.0, close=95.0, atr_val=1.0),
+            110.0,
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

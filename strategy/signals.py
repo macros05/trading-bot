@@ -162,6 +162,32 @@ def should_enter_short(
     return True
 
 
+def update_trailing_stop_short(
+    sl_price: float,
+    entry_price: float,
+    tp_price: float,
+    close: float,
+    atr_val: float,
+) -> float:
+    """Mirror of update_trailing_stop for short positions.
+
+    Short SLs sit ABOVE entry. Tightening means moving the SL DOWN toward entry.
+    Stages (progress from entry toward TP):
+      >= 50%  → move SL to breakeven (entry_price)
+      >= 75%  → trail SL at 1 × ATR above *close*
+    SL only ever moves down — returns min(sl_price, new_sl).
+    """
+    if tp_price >= entry_price:
+        return sl_price
+    progress = (entry_price - close) / (entry_price - tp_price)
+    new_sl = sl_price
+    if progress >= 0.75:
+        new_sl = min(new_sl, close + atr_val)
+    elif progress >= 0.50:
+        new_sl = min(new_sl, entry_price)
+    return new_sl
+
+
 def passes_regime_filters(
     trend_bullish: bool | None,
     adx_val: float | None,
