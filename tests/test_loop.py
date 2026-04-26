@@ -542,5 +542,67 @@ class TestMacroFilterSideAsymmetry(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(opened['side'], 'short')
 
 
+# ---------------------------------------------------------------------------
+# Side-aware exit
+# ---------------------------------------------------------------------------
+
+class TestSideAwareExit(unittest.IsolatedAsyncioTestCase):
+    def _cfg(self):
+        from core.loop import _parse_config
+        return _parse_config({
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 2,
+        })
+
+    async def test_short_take_profit_calls_calc_pnl_short(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from core.loop import _handle_in_position
+        from core.state import BotState, StateManager
+        from risk.manager import RiskManager
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            sm.set_position({
+                'side': 'short', 'entry_price': 100.0, 'qty': 1.0,
+                'ts': 1, 'sl_price': 103.5, 'tp_price': 94.0,
+            })
+            sm.set_state(BotState.IN_POSITION)
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=2)
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'):
+                notif = _handle_in_position(sm, rm, self._cfg(), close=94.0, atr_val=None)
+            self.assertIsNotNone(notif)
+            self.assertIn('TAKE_PROFIT', notif.upper())
+            # Daily PnL should be POSITIVE for a short that hit TP
+            self.assertGreater(rm.get_daily_pnl(), 0)
+
+    async def test_short_stop_loss_negative_pnl(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from core.loop import _handle_in_position
+        from core.state import BotState, StateManager
+        from risk.manager import RiskManager
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            sm.set_position({
+                'side': 'short', 'entry_price': 100.0, 'qty': 1.0,
+                'ts': 1, 'sl_price': 103.5, 'tp_price': 94.0,
+            })
+            sm.set_state(BotState.IN_POSITION)
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=2)
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'):
+                notif = _handle_in_position(sm, rm, self._cfg(), close=103.5, atr_val=None)
+            self.assertIn('STOP_LOSS', notif.upper())
+            self.assertLess(rm.get_daily_pnl(), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

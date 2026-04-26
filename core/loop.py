@@ -193,14 +193,17 @@ def _ensure_sl_tp(position: dict, cfg: _LoopConfig) -> dict:
     if 'sl_price' in position and 'tp_price' in position:
         return position
     entry = position['entry_price']
-    sl_price = entry * (1 - cfg.sl_pct_long)
-    tp_price = entry * (1 + cfg.tp_pct_long)
+    side = position.get('side', 'long')
+    if side == 'long':
+        sl_price = entry * (1 - cfg.sl_pct_long)
+        tp_price = entry * (1 + cfg.tp_pct_long)
+    else:
+        sl_price = entry * (1 + cfg.sl_pct_short)
+        tp_price = entry * (1 - cfg.tp_pct_short)
     position['sl_price'] = sl_price
     position['tp_price'] = tp_price
-    logger.info(
-        'backfilled_sl_tp entry=%.4f sl=%.4f tp=%.4f',
-        entry, sl_price, tp_price,
-    )
+    logger.info('backfilled_sl_tp side=%s entry=%.4f sl=%.4f tp=%.4f',
+                side, entry, sl_price, tp_price)
     return position
 
 
@@ -249,12 +252,17 @@ def _close_position(
         logger.error('close_position called but no position in state')
         return None
 
+    side = position.get('side', 'long')
     entry_price: float = position['entry_price']
     qty: float = position['qty']
-    pnl_usdt, pnl_pct = calc_pnl(close, entry_price, qty)
+    if side == 'long':
+        pnl_usdt, pnl_pct = calc_pnl(close, entry_price, qty)
+    else:
+        pnl_usdt, pnl_pct = calc_pnl_short(close, entry_price, qty)
     result = 'WIN' if pnl_usdt >= 0 else 'LOSS'
 
     trade = {
+        'side':        side,
         'entry_price': entry_price,
         'exit_price':  close,
         'qty':         qty,
@@ -266,8 +274,6 @@ def _close_position(
         'exit_ts':     int(time.time() * 1000),
     }
     _save_trade(trade)
-    # Daily PnL tracks fraction-of-balance loss; with volatility-targeted sizing
-    # the stop-out loss per trade equals risk_pct, not the raw pct move.
     # register_trade receives pnl_pct / 100 for continuity with prior behaviour.
     risk_manager.register_trade(pnl_pct / 100)
 
@@ -275,16 +281,15 @@ def _close_position(
     state_manager.set_daily_pnl(risk_manager.get_daily_pnl(), today)
 
     logger.info(
-        'paper_trade_close reason=%s exit_price=%.4f pnl=%.4f pnl_pct=%.2f%% result=%s',
-        reason, close, pnl_usdt, pnl_pct, result,
+        'paper_trade_close side=%s reason=%s exit_price=%.4f pnl=%.4f pnl_pct=%.2f%% result=%s',
+        side, reason, close, pnl_usdt, pnl_pct, result,
     )
-
     state_manager.set_position(None)
     state_manager.set_state(BotState.WAITING_SIGNAL)
 
     emoji = '✅' if pnl_usdt >= 0 else '❌'
     return (
-        f'{emoji} <b>POSITION CLOSED ({reason.upper()})</b>\n'
+        f'{emoji} <b>{side.upper()} CLOSED ({reason.upper()})</b>\n'
         f'Entry: ${entry_price:,.2f}  →  Exit: ${close:,.2f}\n'
         f'PnL: ${pnl_usdt:+.2f} ({pnl_pct:+.2f}%)\n'
         f'Result: {result}'
@@ -400,29 +405,39 @@ def _handle_in_position(
         state_manager.set_state(BotState.WAITING_SIGNAL)
         return None
     position = _ensure_sl_tp(position, cfg)
+    side = position.get('side', 'long')
 
     if cfg.use_trailing_stop and atr_val is not None and atr_val > 0:
-        new_sl = update_trailing_stop(
-            sl_price=position['sl_price'],
-            entry_price=position['entry_price'],
-            tp_price=position['tp_price'],
-            close=close,
-            atr_val=atr_val,
-        )
-        if new_sl > position['sl_price']:
-            logger.info(
-                'trailing_stop_raised old_sl=%.4f new_sl=%.4f close=%.4f entry=%.4f',
-                position['sl_price'], new_sl, close, position['entry_price'],
+        if side == 'long':
+            new_sl = update_trailing_stop(
+                sl_price=position['sl_price'], entry_price=position['entry_price'],
+                tp_price=position['tp_price'], close=close, atr_val=atr_val,
             )
-            position['sl_price'] = new_sl
-            state_manager.set_position(position)
+            if new_sl > position['sl_price']:
+                logger.info('trailing_stop_raised side=long old_sl=%.4f new_sl=%.4f',
+                            position['sl_price'], new_sl)
+                position['sl_price'] = new_sl
+                state_manager.set_position(position)
+        else:
+            new_sl = update_trailing_stop_short(
+                sl_price=position['sl_price'], entry_price=position['entry_price'],
+                tp_price=position['tp_price'], close=close, atr_val=atr_val,
+            )
+            if new_sl < position['sl_price']:
+                logger.info('trailing_stop_lowered side=short old_sl=%.4f new_sl=%.4f',
+                            position['sl_price'], new_sl)
+                position['sl_price'] = new_sl
+                state_manager.set_position(position)
 
-    pnl_usdt, pnl_pct = calc_pnl(close, position['entry_price'], position['qty'])
+    if side == 'long':
+        pnl_usdt, pnl_pct = calc_pnl(close, position['entry_price'], position['qty'])
+    else:
+        pnl_usdt, pnl_pct = calc_pnl_short(close, position['entry_price'], position['qty'])
     logger.info(
-        'unrealized_pnl=%.4f unrealized_pnl_pct=%.2f%% sl=%.4f tp=%.4f',
-        pnl_usdt, pnl_pct, position['sl_price'], position['tp_price'],
+        'unrealized_pnl side=%s pnl=%.4f pnl_pct=%.2f%% sl=%.4f tp=%.4f',
+        side, pnl_usdt, pnl_pct, position['sl_price'], position['tp_price'],
     )
-    reason = check_exit_price(close, position['sl_price'], position['tp_price'])
+    reason = check_exit_price(close, position['sl_price'], position['tp_price'], side=side)
     if reason:
         return _close_position(state_manager, risk_manager, close, reason)
     return None
