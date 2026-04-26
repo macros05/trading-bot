@@ -42,17 +42,26 @@ def check_exit_price(
     close: float,
     sl_price: float,
     tp_price: float,
+    side: str = 'long',
 ) -> str | None:
     """Return 'stop_loss', 'take_profit', or None based on absolute prices.
 
-    Used whenever the position carries precomputed SL/TP levels (ATR-based or
-    trailing-adjusted). Keeps exit logic in one place and unit-testable.
+    Long convention: sl_price < entry < tp_price; SL trips when close <= sl_price.
+    Short convention: tp_price < entry < sl_price; SL trips when close >= sl_price.
     """
-    if close <= sl_price:
-        return 'stop_loss'
-    if close >= tp_price:
-        return 'take_profit'
-    return None
+    if side == 'long':
+        if close <= sl_price:
+            return 'stop_loss'
+        if close >= tp_price:
+            return 'take_profit'
+        return None
+    if side == 'short':
+        if close >= sl_price:
+            return 'stop_loss'
+        if close <= tp_price:
+            return 'take_profit'
+        return None
+    raise ValueError(f'invalid side: {side!r}')
 
 
 def calc_pnl(

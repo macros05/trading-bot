@@ -233,6 +233,29 @@ class TestShouldEnterShort(unittest.TestCase):
                                             volume_factor=1.2))
 
 
+class TestCheckExitPriceSideAware(unittest.TestCase):
+    def test_long_default_keeps_existing_semantics(self):
+        from strategy.signals import check_exit_price
+        # SL=95, TP=104 (long convention sl<entry<tp)
+        self.assertEqual(check_exit_price(95.0, 95.0, 104.0), 'stop_loss')
+        self.assertEqual(check_exit_price(104.0, 95.0, 104.0), 'take_profit')
+        self.assertIsNone(check_exit_price(100.0, 95.0, 104.0))
+
+    def test_short_inverts_comparison(self):
+        from strategy.signals import check_exit_price
+        # SL=103.5, TP=94 (short convention tp<entry<sl)
+        self.assertEqual(check_exit_price(103.5, 103.5, 94.0, side='short'),
+                         'stop_loss')
+        self.assertEqual(check_exit_price(94.0, 103.5, 94.0, side='short'),
+                         'take_profit')
+        self.assertIsNone(check_exit_price(100.0, 103.5, 94.0, side='short'))
+
+    def test_invalid_side_raises(self):
+        from strategy.signals import check_exit_price
+        with self.assertRaises(ValueError):
+            check_exit_price(100.0, 95.0, 104.0, side='neutral')
+
+
 class TestCalcPnlShort(unittest.TestCase):
     def test_positive_pnl_when_close_below_entry(self):
         from strategy.signals import calc_pnl_short
