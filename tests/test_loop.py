@@ -405,5 +405,71 @@ class TestMacroFilterGate(unittest.IsolatedAsyncioTestCase):
         mf.get_mode.assert_awaited_once()
 
 
+# ---------------------------------------------------------------------------
+# Dual-direction entry signals
+# ---------------------------------------------------------------------------
+
+class TestDualDirectionSignals(unittest.IsolatedAsyncioTestCase):
+    """_handle_waiting_signal opens long on long signal, short on short signal,
+    nothing on contradictory or no signal."""
+
+    def _cfg(self):
+        from core.loop import _parse_config
+        return _parse_config({
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0,
+            'leverage': 2,
+        })
+
+    async def test_short_signal_opens_short_position(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        cfg = self._cfg()
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+        # close=99, sma=100 (close<sma), rsi=70 (>55) → short signal
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=99.0, sma_val=100.0, rsi_val=70.0,
+            atr_val=None, adx_val=None,
+        )
+        sm.set_position.assert_called_once()
+        opened = sm.set_position.call_args[0][0]
+        self.assertEqual(opened['side'], 'short')
+
+    async def test_long_signal_opens_long_position(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        cfg = self._cfg()
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+        # close=101, sma=100 (close>sma), rsi=30 (<40) → long signal
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=101.0, sma_val=100.0, rsi_val=30.0,
+            atr_val=None, adx_val=None,
+        )
+        sm.set_position.assert_called_once()
+        opened = sm.set_position.call_args[0][0]
+        self.assertEqual(opened['side'], 'long')
+
+    async def test_no_signal_no_entry(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        cfg = self._cfg()
+        sm = MagicMock()
+        rm = MagicMock()
+        # close=100, sma=100, rsi=50 → neither signal fires
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=100.0, sma_val=100.0, rsi_val=50.0,
+            atr_val=None, adx_val=None,
+        )
+        sm.set_position.assert_not_called()
+        self.assertIsNone(notif)
+
+
 if __name__ == '__main__':
     unittest.main()

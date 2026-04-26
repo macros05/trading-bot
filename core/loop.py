@@ -18,10 +18,13 @@ from risk.manager import RiskManager
 from strategy.indicators import adx, atr, rsi, sma, volume_sma
 from strategy.signals import (
     calc_pnl,
+    calc_pnl_short,
     check_exit_price,
     passes_regime_filters,
     should_enter,
+    should_enter_short,
     update_trailing_stop,
+    update_trailing_stop_short,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,6 +165,24 @@ def _compute_sl_tp(
     return sl_price, tp_price
 
 
+def _compute_sl_tp_for_side(
+    entry_price: float,
+    cfg: _LoopConfig,
+    atr_val: float | None,
+    side: str,
+) -> tuple[float, float]:
+    """Side-aware SL/TP. Long: sl<entry<tp. Short: tp<entry<sl."""
+    if cfg.use_atr_exits and atr_val is not None and atr_val > 0:
+        if side == 'long':
+            return (entry_price - cfg.atr_sl_multiplier * atr_val,
+                    entry_price + cfg.atr_tp_multiplier * atr_val)
+        return (entry_price + cfg.atr_sl_multiplier * atr_val,
+                entry_price - cfg.atr_tp_multiplier * atr_val)
+    if side == 'long':
+        return (entry_price * (1 - cfg.sl_pct_long), entry_price * (1 + cfg.tp_pct_long))
+    return (entry_price * (1 + cfg.sl_pct_short), entry_price * (1 - cfg.tp_pct_short))
+
+
 def _ensure_sl_tp(position: dict, cfg: _LoopConfig) -> dict:
     """Back-fill sl_price/tp_price on positions opened before this upgrade.
 
@@ -191,8 +212,10 @@ def _open_position(
     qty: float,
     sl_price: float,
     tp_price: float,
+    side: str = 'long',
 ) -> str:
     position = {
+        'side':        side,
         'entry_price': close,
         'qty':         qty,
         'ts':          int(time.time() * 1000),
@@ -202,11 +225,12 @@ def _open_position(
     state_manager.set_position(position)
     state_manager.set_state(BotState.IN_POSITION)
     logger.info(
-        'paper_trade_open entry_price=%.4f qty=%.6f value_usdt=%.2f sl=%.4f tp=%.4f',
-        close, qty, close * qty, sl_price, tp_price,
+        'paper_trade_open side=%s entry_price=%.4f qty=%.6f value_usdt=%.2f sl=%.4f tp=%.4f',
+        side, close, qty, close * qty, sl_price, tp_price,
     )
+    direction_emoji = '📈' if side == 'long' else '📉'
     return (
-        f'📈 <b>POSITION OPENED</b>\n'
+        f'{direction_emoji} <b>{side.upper()} POSITION OPENED</b>\n'
         f'Entry: ${close:,.2f}\n'
         f'Qty: {qty:.6f} BTC\n'
         f'Value: ${close * qty:,.2f} USDT\n'
@@ -318,43 +342,49 @@ def _handle_waiting_signal(
     rsi_val: float,
     atr_val: float | None,
     adx_val: float | None,
+    macro_mode: str | None = None,
 ) -> str | None:
-    if not should_enter(close, sma_val, rsi_val, rsi_threshold=cfg.rsi_threshold):
-        logger.info(
-            'no_signal close=%.4f sma%d=%.4f rsi%d=%.2f threshold=%.1f close_above_sma=%s',
-            close, _SMA_PERIOD, sma_val, _RSI_PERIOD, rsi_val, cfg.rsi_threshold,
-            close > sma_val,
+    long_sig = should_enter(close, sma_val, rsi_val, rsi_threshold=cfg.rsi_threshold)
+    short_sig = should_enter_short(close, sma_val, rsi_val, rsi_threshold=cfg.rsi_short_threshold)
+    # NO_TRADE macro blocks longs only — positive funding is structurally short-friendly
+    if macro_mode == NO_TRADE and long_sig:
+        logger.info('macro_no_trade_blocks_long')
+        long_sig = False
+    if long_sig and short_sig:
+        logger.warning(
+            'contradictory_signals close=%.4f rsi=%.2f long_thr=%.1f short_thr=%.1f',
+            close, rsi_val, cfg.rsi_threshold, cfg.rsi_short_threshold,
         )
         return None
+    if not long_sig and not short_sig:
+        logger.info(
+            'no_signal close=%.4f sma%d=%.4f rsi%d=%.2f long_thr=%.1f short_thr=%.1f',
+            close, _SMA_PERIOD, sma_val, _RSI_PERIOD, rsi_val,
+            cfg.rsi_threshold, cfg.rsi_short_threshold,
+        )
+        return None
+    side = 'long' if long_sig else 'short'
     if not passes_regime_filters(
-        trend_bullish=None,
-        adx_val=adx_val,
+        trend_bullish=None, adx_val=adx_val,
         adx_threshold=cfg.adx_threshold,
         use_trend_filter=cfg.use_trend_filter,
         use_adx_filter=cfg.use_adx_filter,
     ):
-        logger.info(
-            'regime_blocked adx%d=%s threshold=%.1f use_adx=%s',
-            _ADX_PERIOD, f'{adx_val:.1f}' if adx_val is not None else 'n/a',
-            cfg.adx_threshold, cfg.use_adx_filter,
-        )
+        logger.info('regime_blocked side=%s adx=%s', side, adx_val)
         return None
-    logger.info(
-        'buy_signal close=%.4f sma%d=%.4f rsi%d=%.2f threshold=%.1f adx%d=%s',
-        close, _SMA_PERIOD, sma_val, _RSI_PERIOD, rsi_val, cfg.rsi_threshold,
-        _ADX_PERIOD, f'{adx_val:.1f}' if adx_val is not None else 'n/a',
-    )
-    sl_price, tp_price = _compute_sl_tp(close, cfg, atr_val)
-    # After the risk-sizing bug fix, notional is balance × risk_pct / sl_pct
-    # where sl_pct is the *fractional* stop distance used for this entry.
-    effective_sl_pct = (close - sl_price) / close
+    sl_price, tp_price = _compute_sl_tp_for_side(close, cfg, atr_val, side)
+    effective_sl_pct = abs(close - sl_price) / close
     notional = risk_manager.position_size(
         cfg.balance, risk_pct=cfg.risk_pct, sl_pct=effective_sl_pct,
     )
     if notional <= 0:
         return None
     qty = notional / close
-    return _open_position(state_manager, close, qty, sl_price, tp_price)
+    logger.info(
+        'entry_signal side=%s close=%.4f sma=%.4f rsi=%.2f sl=%.4f tp=%.4f',
+        side, close, sma_val, rsi_val, sl_price, tp_price,
+    )
+    return _open_position(state_manager, close, qty, sl_price, tp_price, side=side)
 
 
 def _handle_in_position(
