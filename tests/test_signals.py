@@ -193,5 +193,45 @@ class TestShouldEnterWithVolume(unittest.TestCase):
         ))
 
 
+class TestShouldEnterShort(unittest.TestCase):
+    def test_returns_true_when_rsi_above_threshold_and_close_below_sma(self):
+        from strategy.signals import should_enter_short
+        self.assertTrue(should_enter_short(close=99.0, sma20=100.0, rsi14=56.0,
+                                           rsi_threshold=55.0))
+
+    def test_returns_false_when_rsi_at_threshold(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=99.0, sma20=100.0, rsi14=55.0,
+                                            rsi_threshold=55.0))
+
+    def test_returns_false_when_close_at_sma(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=100.0, sma20=100.0, rsi14=70.0,
+                                            rsi_threshold=55.0))
+
+    def test_returns_false_when_close_above_sma(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=101.0, sma20=100.0, rsi14=70.0,
+                                            rsi_threshold=55.0))
+
+    def test_default_threshold_is_55(self):
+        from strategy.signals import should_enter_short
+        self.assertTrue(should_enter_short(close=99.0, sma20=100.0, rsi14=56.0))
+        self.assertFalse(should_enter_short(close=99.0, sma20=100.0, rsi14=55.0))
+
+    def test_volume_filter_skipped_when_either_arg_none(self):
+        from strategy.signals import should_enter_short
+        self.assertTrue(should_enter_short(close=99, sma20=100, rsi14=70,
+                                           volume=10, volume_sma20=None))
+        self.assertTrue(should_enter_short(close=99, sma20=100, rsi14=70,
+                                           volume=None, volume_sma20=10))
+
+    def test_volume_filter_blocks_when_volume_below_threshold(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=99, sma20=100, rsi14=70,
+                                            volume=5, volume_sma20=10,
+                                            volume_factor=1.2))
+
+
 if __name__ == '__main__':
     unittest.main()
