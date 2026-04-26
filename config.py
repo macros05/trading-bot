@@ -7,8 +7,8 @@ code. Keep both in sync.
 
 # ── Risk & sizing (AGGRESSIVE PROFILE — see docs/superpowers/specs/2026-04-26-short-positions-design.md)
 RISK_PCT = 0.02            # was 0.01
-STOP_LOSS_PCT = 0.035      # was 0.025
-TAKE_PROFIT_PCT = 0.060    # was 0.040
+STOP_LOSS_PCT = 0.035      # was 0.02
+TAKE_PROFIT_PCT = 0.060    # was 0.03
 
 # ── Leverage (futures only) ──────────────────────────────────────────────────
 LEVERAGE = 2               # new — applied at init via exchange.set_leverage()
@@ -36,7 +36,7 @@ USE_TRAILING_STOP = False
 CIRCUIT_BREAKER_PCT = 0.05 # was 0.03
 
 # ── Signal thresholds ────────────────────────────────────────────────────────
-RSI_LONG_THRESHOLD = 45.0  # was 40 (now configurable; aggressive)
+RSI_LONG_THRESHOLD = 45.0  # was 35.0 (loop hardcoded; config had no constant)
 RSI_SHORT_THRESHOLD = 55.0 # new — short mirror
 
 # ── Protections (permissive aggressive defaults — framework present, not active)
@@ -49,27 +49,27 @@ SLIPPAGE = 0.0005          # 0.05 % per side, conservative estimate
 
 # ── Live loop config (consumed by core.loop) ─────────────────────────────────
 BOT_CONFIG = {
-    'symbol':              'BTC/USDT',
-    'timeframe':           '1m',
-    'limit':               200,
-    'interval_seconds':    60,
-    'paper_balance':       10_000.0,
-    'risk_pct':              RISK_PCT,
-    'rsi_threshold':         RSI_LONG_THRESHOLD,
-    'rsi_short_threshold':   RSI_SHORT_THRESHOLD,
-    'stop_loss_pct':         STOP_LOSS_PCT,
-    'take_profit_pct':       TAKE_PROFIT_PCT,
-    'circuit_breaker_pct':   CIRCUIT_BREAKER_PCT,
-    'leverage':              LEVERAGE,
-    'cooldown_seconds':      COOLDOWN_SECONDS,
-    'max_sl_per_day':        MAX_SL_PER_DAY,
-    'use_atr_exits':       USE_ATR_EXITS,
-    'atr_period':          ATR_PERIOD,
-    'atr_sl_multiplier':   ATR_SL_MULTIPLIER,
-    'atr_tp_multiplier':   ATR_TP_MULTIPLIER,
-    'use_trailing_stop':   USE_TRAILING_STOP,
-    'use_adx_filter':      USE_ADX_FILTER,
-    'adx_period':          ADX_PERIOD,
-    'adx_threshold':       ADX_THRESHOLD,
-    'use_trend_filter':    USE_TREND_FILTER,
+    'symbol':               'BTC/USDT',
+    'timeframe':            '1m',
+    'limit':                200,
+    'interval_seconds':     60,
+    'paper_balance':        10_000.0,
+    'risk_pct':             RISK_PCT,
+    'rsi_threshold':        RSI_LONG_THRESHOLD,
+    'rsi_short_threshold':  RSI_SHORT_THRESHOLD,
+    'stop_loss_pct':        STOP_LOSS_PCT,
+    'take_profit_pct':      TAKE_PROFIT_PCT,
+    'circuit_breaker_pct':  CIRCUIT_BREAKER_PCT,
+    'leverage':             LEVERAGE,
+    'cooldown_seconds':     COOLDOWN_SECONDS,
+    'max_sl_per_day':       MAX_SL_PER_DAY,
+    'use_atr_exits':        USE_ATR_EXITS,
+    'atr_period':           ATR_PERIOD,
+    'atr_sl_multiplier':    ATR_SL_MULTIPLIER,
+    'atr_tp_multiplier':    ATR_TP_MULTIPLIER,
+    'use_trailing_stop':    USE_TRAILING_STOP,
+    'use_adx_filter':       USE_ADX_FILTER,
+    'adx_period':           ADX_PERIOD,
+    'adx_threshold':        ADX_THRESHOLD,
+    'use_trend_filter':     USE_TREND_FILTER,
 }
