@@ -98,6 +98,39 @@ def update_trailing_stop(
     return new_sl
 
 
+def calc_pnl_short(
+    close: float,
+    entry_price: float,
+    qty: float,
+) -> tuple[float, float]:
+    """Return (pnl_usdt, pnl_pct) for a short position.
+
+    Positive when close < entry (price fell after we sold short).
+    """
+    pnl_usdt = (entry_price - close) * qty
+    pnl_pct = (entry_price - close) / entry_price * 100
+    return pnl_usdt, pnl_pct
+
+
+def check_exit_short(
+    close: float,
+    entry_price: float,
+    stop_loss_pct: float = 0.035,
+    take_profit_pct: float = 0.06,
+) -> str | None:
+    """Return 'stop_loss', 'take_profit', or None for a short.
+
+    SL trips when price rises above entry; TP trips when price falls below.
+    Aggressive-profile defaults (3.5% / 6%) per spec v3.
+    """
+    change = (entry_price - close) / entry_price
+    if change <= -stop_loss_pct:
+        return 'stop_loss'
+    if change >= take_profit_pct:
+        return 'take_profit'
+    return None
+
+
 def should_enter_short(
     close: float,
     sma20: float,

@@ -233,5 +233,47 @@ class TestShouldEnterShort(unittest.TestCase):
                                             volume_factor=1.2))
 
 
+class TestCalcPnlShort(unittest.TestCase):
+    def test_positive_pnl_when_close_below_entry(self):
+        from strategy.signals import calc_pnl_short
+        pnl_usdt, pnl_pct = calc_pnl_short(close=95.0, entry_price=100.0, qty=2.0)
+        self.assertAlmostEqual(pnl_usdt, 10.0)
+        self.assertAlmostEqual(pnl_pct, 5.0)
+
+    def test_negative_pnl_when_close_above_entry(self):
+        from strategy.signals import calc_pnl_short
+        pnl_usdt, pnl_pct = calc_pnl_short(close=110.0, entry_price=100.0, qty=1.0)
+        self.assertAlmostEqual(pnl_usdt, -10.0)
+        self.assertAlmostEqual(pnl_pct, -10.0)
+
+    def test_signs_mirror_long_calc_pnl(self):
+        from strategy.signals import calc_pnl, calc_pnl_short
+        long_pnl, _ = calc_pnl(close=110.0, entry_price=100.0, qty=1.0)
+        short_pnl, _ = calc_pnl_short(close=110.0, entry_price=100.0, qty=1.0)
+        self.assertAlmostEqual(long_pnl, -short_pnl)
+
+
+class TestCheckExitShort(unittest.TestCase):
+    def test_stop_loss_trips_above_entry(self):
+        from strategy.signals import check_exit_short
+        # Aggressive short profile: SL 3.5 % above entry
+        self.assertEqual(check_exit_short(close=103.5, entry_price=100.0,
+                                          stop_loss_pct=0.035, take_profit_pct=0.06),
+                         'stop_loss')
+
+    def test_take_profit_trips_below_entry(self):
+        from strategy.signals import check_exit_short
+        self.assertEqual(check_exit_short(close=94.0, entry_price=100.0,
+                                          stop_loss_pct=0.035, take_profit_pct=0.06),
+                         'take_profit')
+
+    def test_returns_none_inside_band(self):
+        from strategy.signals import check_exit_short
+        self.assertIsNone(check_exit_short(close=99.0, entry_price=100.0,
+                                           stop_loss_pct=0.035, take_profit_pct=0.06))
+        self.assertIsNone(check_exit_short(close=101.0, entry_price=100.0,
+                                           stop_loss_pct=0.035, take_profit_pct=0.06))
+
+
 if __name__ == '__main__':
     unittest.main()
