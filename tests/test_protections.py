@@ -38,5 +38,42 @@ class TestCooldownPeriod(unittest.TestCase):
         self.assertFalse(blocked)
 
 
+class TestStoplossGuard(unittest.TestCase):
+    def _make_sl_trades(self, count: int, base_ts: int = 1_000_000_000):
+        return [{'reason': 'stop_loss', 'exit_ts': base_ts + i * 60_000}
+                for i in range(count)]
+
+    def test_permits_below_threshold(self):
+        from risk.protections import StoplossGuard
+        guard = StoplossGuard(max_sl=10, lookback_seconds=86_400)
+        trades = self._make_sl_trades(9)
+        blocked, _ = guard.is_blocked(now_ms=1_001_000_000, trades_history=trades)
+        self.assertFalse(blocked)
+
+    def test_blocks_at_threshold(self):
+        from risk.protections import StoplossGuard
+        guard = StoplossGuard(max_sl=10, lookback_seconds=86_400)
+        trades = self._make_sl_trades(10)
+        blocked, reason = guard.is_blocked(now_ms=1_001_000_000, trades_history=trades)
+        self.assertTrue(blocked)
+        self.assertIn('stoploss', reason.lower())
+
+    def test_only_counts_within_lookback(self):
+        from risk.protections import StoplossGuard
+        guard = StoplossGuard(max_sl=3, lookback_seconds=600)
+        old = [{'reason': 'stop_loss', 'exit_ts': 1_000_000_000 + i * 60_000}
+               for i in range(5)]
+        blocked, _ = guard.is_blocked(now_ms=1_000_000_000 + 1_500_000, trades_history=old)
+        self.assertFalse(blocked)
+
+    def test_only_counts_stop_loss_not_take_profit(self):
+        from risk.protections import StoplossGuard
+        guard = StoplossGuard(max_sl=2, lookback_seconds=86_400)
+        trades = [{'reason': 'take_profit', 'exit_ts': 1_000_000_000 + i * 60_000}
+                  for i in range(10)]
+        blocked, _ = guard.is_blocked(now_ms=1_001_000_000, trades_history=trades)
+        self.assertFalse(blocked)
+
+
 if __name__ == '__main__':
     unittest.main()

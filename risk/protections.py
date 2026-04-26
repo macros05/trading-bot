@@ -49,3 +49,32 @@ class CooldownPeriod:
             remaining = (self._cooldown_ms - elapsed) // 1000
             return True, f'cooldown active, {remaining}s remaining since last stop_loss'
         return False, None
+
+
+class StoplossGuard:
+    """Block entries when SL hits in the last `lookback_seconds` >= `max_sl`.
+
+    Aggressive-profile default max_sl=10 / lookback_seconds=86_400 (24h) is
+    effectively permissive for a strategy expected to do <10 SL/day.
+    """
+
+    def __init__(self, max_sl: int = 10, lookback_seconds: int = 86_400) -> None:
+        if max_sl < 1:
+            raise ValueError('max_sl must be >= 1')
+        if lookback_seconds <= 0:
+            raise ValueError('lookback_seconds must be positive')
+        self._max_sl = max_sl
+        self._lookback_ms = lookback_seconds * 1000
+
+    def is_blocked(
+        self, now_ms: int, trades_history: list[dict],
+    ) -> tuple[bool, str | None]:
+        cutoff = now_ms - self._lookback_ms
+        sl_count = sum(
+            1 for trade in trades_history
+            if trade.get('reason') == 'stop_loss'
+            and int(trade.get('exit_ts', 0)) >= cutoff
+        )
+        if sl_count >= self._max_sl:
+            return True, f'stoploss_guard: {sl_count} SL hits in last {self._lookback_ms // 1000}s'
+        return False, None
