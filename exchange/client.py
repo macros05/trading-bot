@@ -50,32 +50,45 @@ def _row_to_candle(row: list[Any]) -> dict[str, Any]:
 # ── client ─────────────────────────────────────────────────────────────────
 
 class BinanceClient:
-    """Binance client for testnet. HTTP calls run in a thread executor so the
-    asyncio event loop is never blocked.
+    """Binance USDT-M Futures client for testnet. HTTP calls run in a thread
+    executor so the asyncio event loop is never blocked.
 
     Credentials are loaded from .env:
-        BINANCE_API_KEY
-        BINANCE_API_SECRET
+        BINANCE_FUTURES_API_KEY
+        BINANCE_FUTURES_API_SECRET
+    (Generate at https://testnet.binancefuture.com)
     """
 
-    def __init__(self) -> None:
-        api_key: str | None    = os.getenv('BINANCE_API_KEY')
-        api_secret: str | None = os.getenv('BINANCE_API_SECRET')
+    def __init__(self, leverage: int = 1, symbol: str = 'BTC/USDT') -> None:
+        api_key: str | None    = os.getenv('BINANCE_FUTURES_API_KEY')
+        api_secret: str | None = os.getenv('BINANCE_FUTURES_API_SECRET')
         if not api_key or not api_secret:
             raise RuntimeError(
-                'BINANCE_API_KEY and BINANCE_API_SECRET must be set in .env'
+                'BINANCE_FUTURES_API_KEY and BINANCE_FUTURES_API_SECRET must be set in .env '
+                '(generate at https://testnet.binancefuture.com)'
             )
         self._api_key    = api_key
         self._api_secret = api_secret
+        self._leverage   = leverage
+        self._symbol     = symbol
         # Sync ccxt — HTTP calls are dispatched via run_in_executor so they
         # never block the event loop.
-        self._exchange: ccxt.binance = ccxt.binance({
-            'apiKey': api_key,
-            'secret': api_secret,
-            'timeout': 10000,
-            'options': {'defaultType': 'spot'},
+        self._exchange = ccxt.binanceusdm({
+            'apiKey':  api_key,
+            'secret':  api_secret,
+            'timeout': 10_000,
+            'options': {'defaultType': 'future'},
         })
         self._exchange.set_sandbox_mode(True)
+        try:
+            self._exchange.set_leverage(leverage, symbol)
+            logger.info('futures_leverage_set leverage=%d symbol=%s', leverage, symbol)
+        except Exception as exc:
+            logger.warning(
+                'set_leverage_failed leverage=%d symbol=%s error=%s '
+                '(may be unavailable in dry-run/test contexts)',
+                leverage, symbol, exc,
+            )
         self._pro_exchange: Any | None = None
 
     # ── REST ───────────────────────────────────────────────────────────────
@@ -170,11 +183,11 @@ class BinanceClient:
             raise ImportError(
                 'ccxt.pro required for WebSocket — run: pip install ccxt[pro]'
             ) from exc
-        self._pro_exchange = ccxtpro.binance({
+        self._pro_exchange = ccxtpro.binanceusdm({
             'apiKey':  self._api_key,
             'secret':  self._api_secret,
             'timeout': 10_000,
-            'options': {'defaultType': 'spot'},
+            'options': {'defaultType': 'future'},
         })
         self._pro_exchange.set_sandbox_mode(True)
         return self._pro_exchange

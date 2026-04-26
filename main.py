@@ -118,7 +118,10 @@ async def _send_startup_notification() -> None:
 
 
 async def main() -> None:
-    client = BinanceClient()
+    client = BinanceClient(
+        leverage=BOT_CONFIG.get('leverage', 1),
+        symbol=BOT_CONFIG.get('symbol', 'BTC/USDT'),
+    )
     buffer = CandleBuffer(maxlen=200)
     state_manager = StateManager()
 
