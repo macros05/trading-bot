@@ -1,6 +1,43 @@
 """Pure signal functions — no side effects, no I/O."""
 
 
+def should_exit_time(entry_ts_ms: int, now_ms: int, max_hold_hours: float) -> bool:
+    """True when the position has been open longer than max_hold_hours."""
+    if max_hold_hours <= 0:
+        return False
+    return (now_ms - entry_ts_ms) >= max_hold_hours * 3_600_000
+
+
+def near_miss_reason(
+    close: float,
+    sma20: float,
+    rsi14: float,
+    rsi_long_threshold: float,
+    rsi_short_threshold: float,
+    rsi_band: float,
+    sma_band_frac: float,
+) -> str | None:
+    """Return a short reason string if entry conditions are CLOSE but not met.
+
+    Long needs rsi < rsi_long_threshold AND close > sma20.
+    Short needs rsi > rsi_short_threshold AND close < sma20.
+    Returns None when not in any near-miss band.
+    """
+    sma_dist_frac = abs(close - sma20) / sma20 if sma20 > 0 else 1.0
+    rsi_to_long = rsi14 - rsi_long_threshold
+    rsi_to_short = rsi_short_threshold - rsi14
+
+    if 0 <= rsi_to_long <= rsi_band and close > sma20:
+        return f'long near-miss: rsi {rsi14:.1f} above {rsi_long_threshold:.1f} by {rsi_to_long:.1f}'
+    if rsi14 < rsi_long_threshold and 0 < (sma20 - close) <= sma20 * sma_band_frac:
+        return f'long near-miss: close {close:.2f} below sma20 {sma20:.2f} ({sma_dist_frac * 100:.2f}%)'
+    if 0 <= rsi_to_short <= rsi_band and close < sma20:
+        return f'short near-miss: rsi {rsi14:.1f} below {rsi_short_threshold:.1f} by {rsi_to_short:.1f}'
+    if rsi14 > rsi_short_threshold and 0 < (close - sma20) <= sma20 * sma_band_frac:
+        return f'short near-miss: close {close:.2f} above sma20 {sma20:.2f} ({sma_dist_frac * 100:.2f}%)'
+    return None
+
+
 def should_enter(
     close: float,
     sma20: float,

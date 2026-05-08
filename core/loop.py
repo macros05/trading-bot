@@ -17,13 +17,16 @@ from exchange.client import BinanceClient
 from notifications import notify
 from risk.manager import RiskManager
 from strategy.indicators import adx, atr, rsi, sma, volume_sma
+from notifications import notify_near_miss
 from strategy.signals import (
     calc_pnl,
     calc_pnl_short,
     check_exit_price,
+    near_miss_reason,
     passes_regime_filters,
     should_enter,
     should_enter_short,
+    should_exit_time,
     update_trailing_stop,
     update_trailing_stop_short,
 )
@@ -65,6 +68,9 @@ class _LoopConfig:
     use_adx_filter:       bool
     adx_threshold:        float
     use_trend_filter:     bool
+    max_hold_hours:       float
+    near_miss_rsi_band:   float
+    near_miss_sma_band:   float
 
 
 def _parse_config(raw: dict[str, Any]) -> _LoopConfig:
@@ -89,6 +95,9 @@ def _parse_config(raw: dict[str, Any]) -> _LoopConfig:
         use_adx_filter       = raw.get('use_adx_filter', False),
         adx_threshold        = raw.get('adx_threshold', 45.0),
         use_trend_filter     = raw.get('use_trend_filter', False),
+        max_hold_hours       = raw.get('max_hold_hours', 0.0),
+        near_miss_rsi_band   = raw.get('near_miss_rsi_band', 0.0),
+        near_miss_sma_band   = raw.get('near_miss_sma_band', 0.0),
     )
 
 
@@ -439,6 +448,14 @@ def _handle_in_position(
         side, pnl_usdt, pnl_pct, position['sl_price'], position['tp_price'],
     )
     reason = check_exit_price(close, position['sl_price'], position['tp_price'], side=side)
+    if reason is None and should_exit_time(
+        int(position.get('ts', 0)), int(time.time() * 1000), cfg.max_hold_hours,
+    ):
+        reason = 'time_exit'
+        logger.info(
+            'time_exit triggered side=%s held_hours=%.1f',
+            side, (time.time() * 1000 - position.get('ts', 0)) / 3_600_000,
+        )
     if reason:
         return _close_position(state_manager, risk_manager, close, reason)
     return None
@@ -471,6 +488,17 @@ async def _process_tick(
             state_manager, risk_manager, cfg, close, sma_v, rsi_v, atr_v, adx_v,
             macro_mode=macro_mode,
         )
+        if notification is None and cfg.near_miss_rsi_band > 0:
+            miss = near_miss_reason(
+                close, sma_v, rsi_v,
+                rsi_long_threshold=cfg.rsi_threshold,
+                rsi_short_threshold=cfg.rsi_short_threshold,
+                rsi_band=cfg.near_miss_rsi_band,
+                sma_band_frac=cfg.near_miss_sma_band,
+            )
+            if miss is not None:
+                logger.info('near_miss %s', miss)
+                await notify_near_miss(miss, close, rsi_v, sma_v)
     elif bot_state == BotState.IN_POSITION:
         notification = _handle_in_position(state_manager, risk_manager, cfg, close, atr_v)
 
