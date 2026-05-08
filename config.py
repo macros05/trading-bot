@@ -76,6 +76,9 @@ TRAILING_BREAKEVEN_AT_PCT = 0.008  # +0.8 % unrealized → SL to breakeven
 TRAILING_TRAIL_AT_PCT = 0.012      # +1.2 % unrealized → start dynamic trail
 TRAILING_DISTANCE_PCT = 0.004      # trail SL 0.4 % behind price
 
+# ── Adaptive Kelly ───────────────────────────────────────────────────────────
+ADAPTIVE_KELLY = True
+
 # ── Sessions ─────────────────────────────────────────────────────────────────
 # Empty tuple = trade all sessions. Backtest output prints per-session metrics
 # so this can be tuned to block the worst-performing session.
@@ -150,6 +153,7 @@ BOT_CONFIG = {
     'adx_flat_threshold':       ADX_FLAT_THRESHOLD,
     'use_session_filter':       USE_SESSION_FILTER,
     'blocked_sessions':         BLOCKED_SESSIONS,
+    'adaptive_kelly':           ADAPTIVE_KELLY,
     'near_miss_rsi_band':       NEAR_MISS_RSI_BAND,
     'near_miss_sma_band':       NEAR_MISS_SMA_BAND,
 }

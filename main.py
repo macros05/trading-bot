@@ -113,6 +113,29 @@ async def _daily_summary_22utc() -> None:
             logger.warning('daily_summary_failed error=%s', exc)
 
 
+async def _weekly_report_monday_8utc() -> None:
+    """Send the live-vs-backtest weekly report Mondays 08:00 UTC."""
+    while True:
+        await asyncio.sleep(_next_run_at(8, 0, weekday=0))
+        try:
+            from analytics.weekly_report import send_weekly_report
+            await send_weekly_report()
+            logger.info('weekly_report_sent')
+        except Exception as exc:
+            logger.warning('weekly_report_failed error=%s', exc)
+
+
+async def _readiness_check_loop() -> None:
+    """Check demo-trading readiness every 6 hours; fire one-time alert."""
+    while True:
+        try:
+            from analytics.weekly_report import maybe_alert_ready
+            await maybe_alert_ready()
+        except Exception as exc:
+            logger.debug('readiness_check_failed error=%s', exc)
+        await asyncio.sleep(6 * 3600)
+
+
 async def _send_startup_notification() -> None:
     """One-time confirmation that paper monitoring is armed."""
     try:
@@ -130,6 +153,8 @@ async def _send_startup_notification() -> None:
 
 
 async def main() -> None:
+    from analytics.live_db import init_db
+    init_db()
     client = BinanceClient(
         leverage=BOT_CONFIG.get('leverage', 1),
         symbol=BOT_CONFIG.get('symbol', 'BTC/USDT'),
@@ -148,6 +173,8 @@ async def main() -> None:
         max_daily_drawdown=BOT_CONFIG.get('circuit_breaker_pct', 0.03),
         initial_daily_pnl=initial_pnl,
         leverage=BOT_CONFIG.get('leverage', 1),
+        base_risk_pct=BOT_CONFIG.get('risk_pct', 0.02),
+        adaptive_kelly=BOT_CONFIG.get('adaptive_kelly', True),
     )
 
     from risk.protections import CooldownPeriod, ProtectionStack, StoplossGuard
@@ -168,11 +195,13 @@ async def main() -> None:
     def _get_loop_task() -> asyncio.Task | None:
         return loop_task
 
-    wd_task         = asyncio.create_task(_watchdog(_get_loop_task))
-    mid_task        = asyncio.create_task(_midnight_reset(risk_manager, state_manager))
-    daily_task      = asyncio.create_task(_paper_test_daily_report())
-    weekly_task     = asyncio.create_task(_paper_test_weekly_checkpoint())
-    daily_sum_task  = asyncio.create_task(_daily_summary_22utc())
+    wd_task          = asyncio.create_task(_watchdog(_get_loop_task))
+    mid_task         = asyncio.create_task(_midnight_reset(risk_manager, state_manager))
+    daily_task       = asyncio.create_task(_paper_test_daily_report())
+    weekly_task      = asyncio.create_task(_paper_test_weekly_checkpoint())
+    daily_sum_task   = asyncio.create_task(_daily_summary_22utc())
+    weekly_rpt_task  = asyncio.create_task(_weekly_report_monday_8utc())
+    readiness_task   = asyncio.create_task(_readiness_check_loop())
     asyncio.create_task(_send_startup_notification())
 
     try:
@@ -204,6 +233,8 @@ async def main() -> None:
         daily_task.cancel()
         weekly_task.cancel()
         daily_sum_task.cancel()
+        weekly_rpt_task.cancel()
+        readiness_task.cancel()
         await client.close()
 
 

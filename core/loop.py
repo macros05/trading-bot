@@ -10,6 +10,12 @@ from typing import Any
 
 import pandas as pd
 
+from analytics.live_db import (
+    init_db, insert_kelly_change, insert_live_trade, insert_near_miss,
+    insert_shadow_trade, list_live_trades, update_shadow_resolution,
+)
+from analytics.macro_calendar import is_high_impact_event, macro_event_for_ts
+from analytics.regime_classifier import classify_regime, percentile_of
 from core.macro_filter import MacroFilter, NO_TRADE
 from risk.protections import ProtectionStack
 from core.state import BotState, StateManager
@@ -242,6 +248,57 @@ def _ensure_sl_tp(position: dict, cfg: _LoopConfig) -> dict:
     return position
 
 
+# ── live-trade recorder ────────────────────────────────────────────────────
+
+def _record_live_trade(
+    position: dict, close: float, exit_ts: int,
+    pnl_usdt: float, pnl_pct: float, reason: str, result: str,
+) -> None:
+    """Persist a closed paper trade to the SQLite live_trades table.
+
+    Failures are logged but never propagate — the JSON trade history is the
+    authoritative record for the dashboard, SQLite is for analysis only.
+    """
+    try:
+        ctx = position.get('entry_context', {}) or {}
+        side = position.get('side', 'long')
+        entry = float(position['entry_price'])
+        qty = float(position['qty'])
+        from strategy.sessions import session_for_ts
+        record = {
+            'entry_ts_ms':     int(position.get('ts', exit_ts)),
+            'exit_ts_ms':      exit_ts,
+            'side':            side,
+            'entry_price':     entry,
+            'exit_price':      close,
+            'qty':             qty,
+            'notional_usdt':   round(entry * qty, 4),
+            'pnl_usdt':        round(pnl_usdt, 4),
+            'pnl_pct':         round(pnl_pct, 4),
+            'result':          result,
+            'exit_reason':     reason,
+            'duration_min':    round((exit_ts - int(position.get('ts', exit_ts))) / 60_000, 1),
+            'session':         ctx.get('session') or session_for_ts(int(position.get('ts', exit_ts))),
+            'entry_rsi':       ctx.get('rsi'),
+            'entry_adx':       ctx.get('adx'),
+            'entry_atr':       ctx.get('atr'),
+            'entry_atr_pct':   ctx.get('atr_pct'),
+            'entry_sma20':     ctx.get('sma20'),
+            'entry_sma50':     ctx.get('sma50'),
+            'mtf_15m_aligned': (1 if ctx.get('mtf_15m_aligned') else
+                                (0 if ctx.get('mtf_15m_aligned') is False else None)),
+            'htf_4h_trend':    ctx.get('htf_4h_trend'),
+            'htf_daily_trend': ctx.get('htf_daily_trend'),
+            'regime':          ctx.get('regime'),
+            'macro_event':     ctx.get('macro_event'),
+            'kelly_used':      ctx.get('kelly_used'),
+        }
+        insert_live_trade(record)
+        logger.info('live_trade_recorded id=ok side=%s pnl=%.4f', side, pnl_usdt)
+    except Exception as exc:
+        logger.warning('live_trade_record_failed error=%s', exc)
+
+
 # ── position helpers ───────────────────────────────────────────────────────
 
 def _open_position(
@@ -253,13 +310,16 @@ def _open_position(
     side: str = 'long',
     context: dict | None = None,
 ) -> str:
+    ts_ms = int(time.time() * 1000)
     position = {
         'side':        side,
         'entry_price': close,
         'qty':         qty,
-        'ts':          int(time.time() * 1000),
+        'ts':          ts_ms,
         'sl_price':    sl_price,
         'tp_price':    tp_price,
+        # Snapshot of conditions at entry — read back at close time.
+        'entry_context': dict(context) if context else {},
     }
     state_manager.set_position(position)
     state_manager.set_state(BotState.IN_POSITION)
@@ -308,6 +368,7 @@ def _close_position(
         pnl_usdt, pnl_pct = calc_pnl_short(close, entry_price, qty)
     result = 'WIN' if pnl_usdt >= 0 else 'LOSS'
 
+    exit_ts = int(time.time() * 1000)
     trade = {
         'side':        side,
         'entry_price': entry_price,
@@ -318,9 +379,10 @@ def _close_position(
         'result':      result,
         'reason':      reason,
         'entry_ts':    position['ts'],
-        'exit_ts':     int(time.time() * 1000),
+        'exit_ts':     exit_ts,
     }
     _save_trade(trade)
+    _record_live_trade(position, close, exit_ts, pnl_usdt, pnl_pct, reason, result)
     risk_manager.register_trade(pnl_pct / 100)
 
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
@@ -388,6 +450,68 @@ def _compute_mtf_1h(df: pd.DataFrame, period: int = 200) -> bool | None:
     except (ValueError, KeyError):
         return None
     return bool(flag) if pd.notna(flag) else None
+
+
+_TF_BARS = {'15min': 15, '1h': 60, '4h': 240, '1D': 1440}
+
+
+def _compute_htf_trend(df: pd.DataFrame, tf: str, period: int = 50) -> str | None:
+    """Resample to *tf* and return 'up' / 'down' / None based on close vs SMA(period)."""
+    bars_per_tf = _TF_BARS.get(tf, 0)
+    if bars_per_tf == 0 or len(df) < period * bars_per_tf:
+        return None
+    try:
+        flag = higher_tf_trend_sma(df, tf=tf, period=period).iloc[-1]
+    except (ValueError, KeyError):
+        return None
+    if pd.isna(flag):
+        return None
+    return 'up' if bool(flag) else 'down'
+
+
+def _update_adaptive_kelly_from_recent(risk_manager: RiskManager) -> None:
+    """Refresh effective_risk_pct from the last N live trades (if adaptive)."""
+    try:
+        recent = list_live_trades(limit=20)
+        recent_oldest_first = list(reversed(recent))
+        change = risk_manager.update_adaptive_kelly(recent_oldest_first)
+        if change is not None:
+            try:
+                insert_kelly_change(change)
+            except Exception as exc:
+                logger.debug('kelly_change_db_failed error=%s', exc)
+    except Exception as exc:
+        logger.debug('adaptive_kelly_update_failed error=%s', exc)
+
+
+def _record_near_miss_db(
+    miss: str, close: float, rsi_val: float, sma_val: float,
+    cfg: _LoopConfig, ts_ms: int,
+) -> None:
+    """Persist a near-miss snapshot to SQLite for later analysis."""
+    side_intended = 'long' if 'long near-miss' in miss else (
+        'short' if 'short near-miss' in miss else None
+    )
+    if side_intended == 'long':
+        rsi_distance = rsi_val - cfg.rsi_threshold
+    elif side_intended == 'short':
+        rsi_distance = cfg.rsi_short_threshold - rsi_val
+    else:
+        rsi_distance = None
+    sma_distance_pct = (close - sma_val) / sma_val * 100 if sma_val else None
+    try:
+        insert_near_miss({
+            'ts_ms':            ts_ms,
+            'reason':           miss,
+            'close':            close,
+            'rsi':              rsi_val,
+            'sma20':            sma_val,
+            'rsi_distance':     rsi_distance,
+            'sma_distance_pct': sma_distance_pct,
+            'side_intended':    side_intended,
+        })
+    except Exception as exc:
+        logger.debug('near_miss_db_write_failed error=%s', exc)
 
 
 def _log_tick(
@@ -471,6 +595,11 @@ def _handle_waiting_signal(
     last_closes: list[float] | None = None,
     now_ms: int | None = None,
     macro_mode: str | None = None,
+    htf_4h_trend: str | None = None,
+    htf_daily_trend: str | None = None,
+    atr_pct: float | None = None,
+    range_quiet: bool = False,
+    kelly_used: float | None = None,
 ) -> str | None:
     long_sig = should_enter(close, sma_val, rsi_val, rsi_threshold=cfg.rsi_threshold)
     short_sig = should_enter_short(close, sma_val, rsi_val, rsi_threshold=cfg.rsi_short_threshold)
@@ -504,8 +633,11 @@ def _handle_waiting_signal(
 
     sl_price, tp_price = _compute_sl_tp_for_side(close, cfg, atr_val, side)
     effective_sl_pct = abs(close - sl_price) / close
+    # Adaptive Kelly: read effective_risk_pct from risk_manager (already
+    # updated each tick via _update_adaptive_kelly_from_recent).
+    risk_for_size = getattr(risk_manager, 'effective_risk_pct', cfg.risk_pct)
     notional = risk_manager.position_size(
-        cfg.balance, risk_pct=cfg.risk_pct, sl_pct=effective_sl_pct,
+        cfg.balance, risk_pct=risk_for_size, sl_pct=effective_sl_pct,
     )
     if notional <= 0:
         return None
@@ -515,10 +647,35 @@ def _handle_waiting_signal(
         side, close, sma_val, rsi_val, sl_price, tp_price,
     )
     context = {
-        'session': session_for_ts(ts_now),
-        'adx':     adx_val,
-        'trend_15m': htf_15m,
+        'session':           session_for_ts(ts_now),
+        'rsi':               rsi_val,
+        'adx':               adx_val,
+        'atr':               atr_val,
+        'atr_pct':           atr_pct,
+        'sma20':             sma_val,
+        'sma50':             sma50,
+        'mtf_15m_aligned':   None if htf_15m is None else (
+            (side == 'long' and htf_15m) or (side == 'short' and not htf_15m)
+        ),
+        'trend_15m':         htf_15m,
+        'htf_4h_trend':      htf_4h_trend,
+        'htf_daily_trend':   htf_daily_trend,
+        'regime':            classify_regime(adx_val, atr_pct, range_quiet),
+        'macro_event':       macro_event_for_ts(ts_now) or None,
+        'kelly_used':        kelly_used if kelly_used is not None else cfg.risk_pct,
     }
+    # Shadow mode: log the decision (not the position) for offline comparison
+    try:
+        from analytics.shadow import record_decision
+        record_decision({
+            'decision_ts_ms': ts_now,
+            'side':           side,
+            'entry_price':    close,
+            'sl_price':       sl_price,
+            'tp_price':       tp_price,
+        })
+    except Exception as exc:
+        logger.debug('shadow_decision_record_failed error=%s', exc)
     return _open_position(state_manager, close, qty, sl_price, tp_price,
                           side=side, context=context)
 
@@ -682,13 +839,37 @@ async def _process_tick(
 
     htf_15m = _compute_mtf_15m(df, cfg.mtf_15m_period) if cfg.use_mtf_filter else None
     htf_1h  = _compute_mtf_1h(df) if cfg.use_mtf_filter and cfg.mtf_require_1h else None
+    htf_4h_trend = _compute_htf_trend(df, '4h', period=50)
+    htf_daily_trend = _compute_htf_trend(df, '1D', period=50)
 
     last_closes: list[float] = [float(c) for c in df['close'].tolist()]
+    atr_pct_now = percentile_of(atr_v, sorted(loop_state.atr_history))
+    range_quiet_now = (
+        cfg.range_lookback_min > 0
+        and len(last_closes) >= cfg.range_lookback_min
+        and is_quiet_range(last_closes[-cfg.range_lookback_min:],
+                           cfg.range_pct_threshold)
+    )
 
     notification: str | None = None
     transition: str | None = None
     if bot_state == BotState.WAITING_SIGNAL:
-        if _is_paused():
+        # Refresh adaptive Kelly before each entry decision
+        _update_adaptive_kelly_from_recent(risk_manager)
+        # Macro-event auto-pause check (does not flip the persistent flag)
+        macro_event = macro_event_for_ts(now_ms)
+        macro_block = False
+        if is_high_impact_event(now_ms):
+            try:
+                from analytics.macro_pause import should_auto_pause_for_macro
+                macro_block, reason = should_auto_pause_for_macro(
+                    list_live_trades(limit=200), macro_event,
+                )
+                if macro_block:
+                    logger.info('macro_auto_pause %s', reason)
+            except Exception as exc:
+                logger.debug('macro_auto_pause_check_failed error=%s', exc)
+        if _is_paused() or macro_block:
             logger.info('bot_paused — skipping entry evaluation')
         else:
             notification = _handle_waiting_signal(
@@ -698,6 +879,11 @@ async def _process_tick(
                 htf_15m=htf_15m, htf_1h=htf_1h,
                 last_closes=last_closes, now_ms=now_ms,
                 macro_mode=macro_mode,
+                htf_4h_trend=htf_4h_trend,
+                htf_daily_trend=htf_daily_trend,
+                atr_pct=atr_pct_now,
+                range_quiet=range_quiet_now,
+                kelly_used=getattr(risk_manager, 'effective_risk_pct', None),
             )
             if notification is None and cfg.near_miss_rsi_band > 0:
                 miss = near_miss_reason(
@@ -709,6 +895,7 @@ async def _process_tick(
                 )
                 if miss is not None:
                     logger.info('near_miss %s', miss)
+                    _record_near_miss_db(miss, close, rsi_v, sma_v, cfg, now_ms)
                     await notify_near_miss(miss, close, rsi_v, sma_v)
         # reset position closes when waiting
         loop_state.position_closes.clear()

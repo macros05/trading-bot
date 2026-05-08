@@ -172,6 +172,74 @@ async def logs():
         return ""
 
 
+@app.get("/api/live-trades")
+async def api_live_trades(limit: int = 200):
+    """Return paginated live trades from SQLite with rich metadata."""
+    from analytics.live_db import list_live_trades, count_trades
+    return {
+        'total':  count_trades(),
+        'trades': list_live_trades(limit=max(1, min(limit, 1000))),
+    }
+
+
+@app.get("/api/validation")
+async def api_validation():
+    """Live vs backtest validation report — used by the dashboard panel."""
+    from analytics.live_db import list_live_trades
+    from analytics.validation import evaluate, per_condition_analysis
+    from datetime import datetime, timezone
+    from pathlib import Path
+    import os
+
+    trades = list_live_trades()
+    # days_running: time since the bot db was created
+    db_path = Path('data/live_trades.db')
+    if db_path.exists():
+        days_running = max(1, int(
+            (datetime.now(timezone.utc).timestamp() - os.path.getmtime(db_path)) / 86_400
+        ))
+    else:
+        days_running = 0
+    return {
+        'evaluation': evaluate(trades, days_running),
+        'conditions': per_condition_analysis(trades),
+    }
+
+
+@app.get("/api/readiness")
+async def api_readiness():
+    """Demo-trading readiness gate report."""
+    from analytics.live_db import list_live_trades
+    from analytics.validation import readiness_check
+    from datetime import datetime, timezone
+    from pathlib import Path
+    import os
+
+    trades = list_live_trades()
+    db_path = Path('data/live_trades.db')
+    if db_path.exists():
+        days_running = max(1, int(
+            (datetime.now(timezone.utc).timestamp() - os.path.getmtime(db_path)) / 86_400
+        ))
+    else:
+        days_running = 0
+    return readiness_check(trades, days_running)
+
+
+@app.get("/api/near-misses")
+async def api_near_misses(limit: int = 200):
+    """Recent near-miss snapshots for the dashboard distribution chart."""
+    from analytics.live_db import list_near_misses
+    return {'misses': list_near_misses(limit=max(1, min(limit, 1000)))}
+
+
+@app.get("/api/kelly-history")
+async def api_kelly_history():
+    """Adaptive Kelly adjustment history."""
+    from analytics.live_db import list_kelly_changes
+    return {'changes': list_kelly_changes()}
+
+
 @app.get("/performance")
 async def performance():
     """Aggregated performance metrics: PnL/day, per-side, per-session, equity, last 20 trades."""
