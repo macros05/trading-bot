@@ -33,13 +33,64 @@ class TestAggressiveProfileConstants(unittest.TestCase):
 
     def test_rsi_thresholds(self):
         from config import RSI_LONG_THRESHOLD, RSI_SHORT_THRESHOLD
-        self.assertEqual(RSI_LONG_THRESHOLD, 40.0)
-        self.assertEqual(RSI_SHORT_THRESHOLD, 55.0)
+        # Loosened thresholds (45/53) used since the May-2026 low-vol regime;
+        # the new MTF + volatility filters compensate for the wider band.
+        self.assertEqual(RSI_LONG_THRESHOLD, 45.0)
+        self.assertEqual(RSI_SHORT_THRESHOLD, 53.0)
 
     def test_protections_defaults_permissive(self):
         from config import COOLDOWN_SECONDS, MAX_SL_PER_DAY
         self.assertEqual(COOLDOWN_SECONDS, 0)
         self.assertEqual(MAX_SL_PER_DAY, 10)
+
+
+class TestNewFilterConstants(unittest.TestCase):
+    def test_volatility_filter_defaults(self):
+        from config import (USE_VOLATILITY_FILTER, VOLATILITY_LOOKBACK_HOURS,
+                            VOLATILITY_LOW_PERCENTILE, VOLATILITY_HIGH_PERCENTILE)
+        self.assertTrue(USE_VOLATILITY_FILTER)
+        self.assertEqual(VOLATILITY_LOOKBACK_HOURS, 48)
+        self.assertEqual(VOLATILITY_LOW_PERCENTILE, 20.0)
+        self.assertEqual(VOLATILITY_HIGH_PERCENTILE, 80.0)
+
+    def test_range_quiet_market_defaults(self):
+        from config import RANGE_LOOKBACK_MIN, RANGE_PCT_THRESHOLD
+        self.assertEqual(RANGE_LOOKBACK_MIN, 120)
+        self.assertEqual(RANGE_PCT_THRESHOLD, 0.003)
+
+    def test_mtf_filter_defaults(self):
+        from config import (USE_MTF_FILTER, MTF_15M_PERIOD,
+                            MTF_REQUIRE_15M, MTF_REQUIRE_1H)
+        self.assertTrue(USE_MTF_FILTER)
+        self.assertEqual(MTF_15M_PERIOD, 50)
+        self.assertTrue(MTF_REQUIRE_15M)
+        self.assertFalse(MTF_REQUIRE_1H)
+
+    def test_short_trend_filter_defaults(self):
+        from config import (USE_SHORT_TREND_FILTER, SHORT_ADX_MIN,
+                            SHORT_SMA_PERIOD, ADX_FLAT_THRESHOLD)
+        self.assertTrue(USE_SHORT_TREND_FILTER)
+        self.assertEqual(SHORT_ADX_MIN, 20.0)
+        self.assertEqual(SHORT_SMA_PERIOD, 50)
+        self.assertEqual(ADX_FLAT_THRESHOLD, 18.0)
+
+    def test_trailing_stop_defaults(self):
+        from config import (USE_TRAILING_STOP, TRAILING_BREAKEVEN_AT_PCT,
+                            TRAILING_TRAIL_AT_PCT, TRAILING_DISTANCE_PCT)
+        self.assertTrue(USE_TRAILING_STOP)
+        self.assertEqual(TRAILING_BREAKEVEN_AT_PCT, 0.008)
+        self.assertEqual(TRAILING_TRAIL_AT_PCT, 0.012)
+        self.assertEqual(TRAILING_DISTANCE_PCT, 0.004)
+
+    def test_stalled_position_defaults(self):
+        from config import STALLED_HOURS, STALLED_MOVE_THRESHOLD
+        self.assertEqual(STALLED_HOURS, 6.0)
+        self.assertEqual(STALLED_MOVE_THRESHOLD, 0.005)
+
+    def test_session_filter_defaults(self):
+        from config import USE_SESSION_FILTER, BLOCKED_SESSIONS
+        self.assertTrue(USE_SESSION_FILTER)
+        self.assertIn('off', BLOCKED_SESSIONS)
 
 
 class TestBotConfigKeys(unittest.TestCase):
@@ -55,6 +106,12 @@ class TestBotConfigKeys(unittest.TestCase):
             'use_atr_exits', 'atr_period', 'atr_sl_multiplier', 'atr_tp_multiplier',
             'use_trailing_stop', 'use_adx_filter', 'adx_period',
             'adx_threshold', 'use_trend_filter',
+            'use_volatility_filter', 'volatility_lookback_hours',
+            'use_mtf_filter', 'use_session_filter', 'blocked_sessions',
+            'use_short_trend_filter', 'short_adx_min', 'short_sma_period',
+            'adx_flat_threshold', 'stalled_hours', 'stalled_move_threshold',
+            'range_lookback_min', 'range_pct_threshold',
+            'trailing_breakeven_pct', 'trailing_trail_pct', 'trailing_distance_pct',
         }
         missing = required - set(BOT_CONFIG.keys())
         self.assertEqual(missing, set(), f'Missing keys: {missing}')

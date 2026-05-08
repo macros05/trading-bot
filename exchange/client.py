@@ -50,45 +50,62 @@ def _row_to_candle(row: list[Any]) -> dict[str, Any]:
 # ── client ─────────────────────────────────────────────────────────────────
 
 class BinanceClient:
-    """Binance USDT-M Futures client for testnet. HTTP calls run in a thread
-    executor so the asyncio event loop is never blocked.
+    """Binance USDT-M Futures client.
 
-    Credentials are loaded from .env:
-        BINANCE_FUTURES_API_KEY
-        BINANCE_FUTURES_API_SECRET
-    (Generate at https://testnet.binancefuture.com)
+    Mode is selected by BINANCE_MODE env var:
+      - 'paper'   (default): no real orders. Public OHLCV from prod, no auth.
+      - 'demo':              Binance Demo Trading (ex-testnet.binancefuture.com).
+                             Requires BINANCE_FUTURES_API_KEY/SECRET.
+      - 'live':              real funds. Requires keys + LIVE_ACK=I_UNDERSTAND.
+
+    HTTP calls run in a thread executor so the asyncio loop is never blocked.
     """
 
     def __init__(self, leverage: int = 1, symbol: str = 'BTC/USDT') -> None:
+        mode = os.getenv('BINANCE_MODE', 'paper').lower()
+        if mode not in ('paper', 'demo', 'live'):
+            raise RuntimeError(f'invalid BINANCE_MODE={mode!r}; expected paper|demo|live')
         api_key: str | None    = os.getenv('BINANCE_FUTURES_API_KEY')
         api_secret: str | None = os.getenv('BINANCE_FUTURES_API_SECRET')
-        if not api_key or not api_secret:
+
+        if mode in ('demo', 'live') and (not api_key or not api_secret):
             raise RuntimeError(
-                'BINANCE_FUTURES_API_KEY and BINANCE_FUTURES_API_SECRET must be set in .env '
-                '(generate at https://testnet.binancefuture.com)'
+                f'BINANCE_MODE={mode} requires BINANCE_FUTURES_API_KEY and '
+                'BINANCE_FUTURES_API_SECRET in .env'
             )
-        self._api_key    = api_key
-        self._api_secret = api_secret
+        if mode == 'live' and os.getenv('LIVE_ACK', '') != 'I_UNDERSTAND':
+            raise RuntimeError(
+                'BINANCE_MODE=live requires LIVE_ACK=I_UNDERSTAND to confirm real-funds usage'
+            )
+
+        self._mode       = mode
+        self._api_key    = api_key or ''
+        self._api_secret = api_secret or ''
         self._leverage   = leverage
         self._symbol     = symbol
-        # Sync ccxt — HTTP calls are dispatched via run_in_executor so they
-        # never block the event loop.
         self._exchange = ccxt.binanceusdm({
-            'apiKey':  api_key,
-            'secret':  api_secret,
+            'apiKey':  self._api_key,
+            'secret':  self._api_secret,
             'timeout': 10_000,
             'options': {'defaultType': 'future'},
         })
-        self._exchange.set_sandbox_mode(True)
-        try:
-            self._exchange.set_leverage(leverage, symbol)
-            logger.info('futures_leverage_set leverage=%d symbol=%s', leverage, symbol)
-        except Exception as exc:
-            logger.warning(
-                'set_leverage_failed leverage=%d symbol=%s error=%s '
-                '(may be unavailable in dry-run/test contexts)',
-                leverage, symbol, exc,
-            )
+        # Demo and paper both enable the testnet-style sandbox endpoint.
+        # Live uses production endpoints (no sandbox flag).
+        if mode != 'live':
+            self._exchange.set_sandbox_mode(True)
+
+        if mode in ('demo', 'live'):
+            try:
+                self._exchange.set_leverage(leverage, symbol)
+                logger.info('futures_leverage_set mode=%s leverage=%d symbol=%s',
+                            mode, leverage, symbol)
+            except Exception as exc:
+                logger.warning(
+                    'set_leverage_failed mode=%s leverage=%d symbol=%s error=%s',
+                    mode, leverage, symbol, exc,
+                )
+        else:
+            logger.info('binance_client paper_mode: no real orders will be placed')
         self._pro_exchange: Any | None = None
 
     # ── REST ───────────────────────────────────────────────────────────────
@@ -189,7 +206,8 @@ class BinanceClient:
             'timeout': 10_000,
             'options': {'defaultType': 'future'},
         })
-        self._pro_exchange.set_sandbox_mode(True)
+        if self._mode != 'live':
+            self._pro_exchange.set_sandbox_mode(True)
         return self._pro_exchange
 
     async def _invoke_callback(

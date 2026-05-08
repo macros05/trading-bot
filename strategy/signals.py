@@ -225,6 +225,78 @@ def update_trailing_stop_short(
     return new_sl
 
 
+def update_trailing_stop_pct(
+    sl_price: float,
+    entry_price: float,
+    close: float,
+    side: str,
+    breakeven_at_pct: float = 0.008,
+    trail_at_pct: float = 0.012,
+    trail_distance_pct: float = 0.004,
+) -> tuple[float, str | None]:
+    """Percentage-based trailing stop with three states.
+
+    Returns (new_sl_price, transition) where transition is one of:
+        'breakeven' — SL just crossed up to entry
+        'trailing'  — SL is now riding behind price by trail_distance_pct
+        None        — no change
+
+    Long convention: SL only moves UP. Short convention: SL only moves DOWN.
+    """
+    if side == 'long':
+        gain_pct = (close - entry_price) / entry_price
+        target_sl = sl_price
+        transition: str | None = None
+        if gain_pct >= trail_at_pct:
+            candidate = close * (1 - trail_distance_pct)
+            if candidate > target_sl:
+                target_sl = candidate
+                transition = 'trailing'
+        elif gain_pct >= breakeven_at_pct:
+            if entry_price > target_sl:
+                target_sl = entry_price
+                transition = 'breakeven'
+        return target_sl, transition
+    if side == 'short':
+        gain_pct = (entry_price - close) / entry_price
+        target_sl = sl_price
+        transition = None
+        if gain_pct >= trail_at_pct:
+            candidate = close * (1 + trail_distance_pct)
+            if candidate < target_sl:
+                target_sl = candidate
+                transition = 'trailing'
+        elif gain_pct >= breakeven_at_pct:
+            if entry_price < target_sl:
+                target_sl = entry_price
+                transition = 'breakeven'
+        return target_sl, transition
+    raise ValueError(f'invalid side: {side!r}')
+
+
+def tighten_sl_tp_for_stalled(
+    sl_price: float,
+    tp_price: float,
+    entry_price: float,
+    side: str,
+) -> tuple[float, float]:
+    """Halve the absolute distance from entry to SL and TP.
+
+    Used when a position has been open for hours but barely moved — pulling
+    the targets closer increases the chance of a quick exit so capital can
+    redeploy onto the next signal.
+    """
+    if side == 'long':
+        new_sl = entry_price - (entry_price - sl_price) / 2.0
+        new_tp = entry_price + (tp_price - entry_price) / 2.0
+        return new_sl, new_tp
+    if side == 'short':
+        new_sl = entry_price + (sl_price - entry_price) / 2.0
+        new_tp = entry_price - (entry_price - tp_price) / 2.0
+        return new_sl, new_tp
+    raise ValueError(f'invalid side: {side!r}')
+
+
 def passes_regime_filters(
     trend_bullish: bool | None,
     adx_val: float | None,

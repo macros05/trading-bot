@@ -101,6 +101,18 @@ async def _paper_test_weekly_checkpoint() -> None:
             logger.warning('paper_weekly_checkpoint_failed error=%s', exc)
 
 
+async def _daily_summary_22utc() -> None:
+    """Send the day-end summary every day at 22:00 UTC."""
+    while True:
+        await asyncio.sleep(_next_run_at(22, 0))
+        try:
+            from telegram_commands import send_daily_summary
+            await send_daily_summary()
+            logger.info('daily_summary_sent')
+        except Exception as exc:
+            logger.warning('daily_summary_failed error=%s', exc)
+
+
 async def _send_startup_notification() -> None:
     """One-time confirmation that paper monitoring is armed."""
     try:
@@ -156,10 +168,11 @@ async def main() -> None:
     def _get_loop_task() -> asyncio.Task | None:
         return loop_task
 
-    wd_task     = asyncio.create_task(_watchdog(_get_loop_task))
-    mid_task    = asyncio.create_task(_midnight_reset(risk_manager, state_manager))
-    daily_task  = asyncio.create_task(_paper_test_daily_report())
-    weekly_task = asyncio.create_task(_paper_test_weekly_checkpoint())
+    wd_task         = asyncio.create_task(_watchdog(_get_loop_task))
+    mid_task        = asyncio.create_task(_midnight_reset(risk_manager, state_manager))
+    daily_task      = asyncio.create_task(_paper_test_daily_report())
+    weekly_task     = asyncio.create_task(_paper_test_weekly_checkpoint())
+    daily_sum_task  = asyncio.create_task(_daily_summary_22utc())
     asyncio.create_task(_send_startup_notification())
 
     try:
@@ -190,6 +203,7 @@ async def main() -> None:
         mid_task.cancel()
         daily_task.cancel()
         weekly_task.cancel()
+        daily_sum_task.cancel()
         await client.close()
 
 

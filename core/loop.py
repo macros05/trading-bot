@@ -2,6 +2,7 @@ import logging
 import os
 import time
 import json
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,21 +15,22 @@ from risk.protections import ProtectionStack
 from core.state import BotState, StateManager
 from data.candles import CandleBuffer
 from exchange.client import BinanceClient
-from notifications import notify
+from notifications import notify, notify_near_miss, notify_trailing
 from risk.manager import RiskManager
-from strategy.indicators import adx, atr, rsi, sma, volume_sma
-from notifications import notify_near_miss
+from strategy.indicators import (
+    adx, atr, higher_tf_trend_ema, higher_tf_trend_sma, rsi, sma, volume_sma,
+)
+from strategy.regime import (
+    atr_percentile_bounds, is_mtf_aligned, is_position_stalled,
+    is_quiet_range, passes_short_trend_filter, passes_volatility_window,
+    shorts_disabled_in_flat,
+)
+from strategy.sessions import is_session_allowed, session_for_ts
 from strategy.signals import (
-    calc_pnl,
-    calc_pnl_short,
-    check_exit_price,
-    near_miss_reason,
-    passes_regime_filters,
-    should_enter,
-    should_enter_short,
-    should_exit_time,
-    update_trailing_stop,
-    update_trailing_stop_short,
+    calc_pnl, calc_pnl_short, check_exit_price,
+    near_miss_reason, passes_regime_filters,
+    should_enter, should_enter_short, should_exit_time,
+    tighten_sl_tp_for_stalled, update_trailing_stop_pct,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,62 +44,109 @@ _MIN_CANDLES    = max(_SMA_PERIOD, _RSI_PERIOD, _VOL_SMA_PERIOD, _ATR_PERIOD)
 _DATA_DIR       = Path('data')
 _TRADES_FILE    = _DATA_DIR / 'trades_history.json'
 _HEALTH_FILE    = _DATA_DIR / 'bot_health.json'
+_PAUSE_FILE     = _DATA_DIR / 'pause.flag'
+
+# Buffers for filters that need history beyond _MIN_CANDLES
+_ATR_HISTORY_MAXLEN  = 60 * 48 + 10   # ~48h of 1m bars + safety
+_POS_CLOSES_MAXLEN   = 60 * 24       # ~24h of 1m bars; bound to MAX_HOLD_HOURS in practice
 
 
 # ── config dataclass ───────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class _LoopConfig:
-    symbol:               str
-    timeframe:            str
-    limit:                int
-    interval:             float
-    balance:              float
-    risk_pct:             float
-    sl_pct_long:          float
-    tp_pct_long:          float
-    sl_pct_short:         float
-    tp_pct_short:         float
-    rsi_threshold:        float           # long entry threshold
-    rsi_short_threshold:  float           # short entry threshold
-    leverage:             int
-    use_atr_exits:        bool
-    atr_sl_multiplier:    float
-    atr_tp_multiplier:    float
-    use_trailing_stop:    bool
-    use_adx_filter:       bool
-    adx_threshold:        float
-    use_trend_filter:     bool
-    max_hold_hours:       float
-    near_miss_rsi_band:   float
-    near_miss_sma_band:   float
+    symbol:                   str
+    timeframe:                str
+    limit:                    int
+    interval:                 float
+    balance:                  float
+    risk_pct:                 float
+    sl_pct_long:              float
+    tp_pct_long:              float
+    sl_pct_short:             float
+    tp_pct_short:             float
+    rsi_threshold:            float
+    rsi_short_threshold:      float
+    leverage:                 int
+    use_atr_exits:            bool
+    atr_sl_multiplier:        float
+    atr_tp_multiplier:        float
+    use_trailing_stop:        bool
+    trailing_breakeven_pct:   float
+    trailing_trail_pct:       float
+    trailing_distance_pct:    float
+    use_adx_filter:           bool
+    adx_threshold:            float
+    use_trend_filter:         bool
+    max_hold_hours:           float
+    stalled_hours:            float
+    stalled_move_threshold:   float
+    range_lookback_min:       int
+    range_pct_threshold:      float
+    use_volatility_filter:    bool
+    volatility_lookback_hours: int
+    volatility_low_pct:       float
+    volatility_high_pct:      float
+    use_mtf_filter:           bool
+    mtf_15m_period:           int
+    mtf_require_15m:          bool
+    mtf_require_1h:           bool
+    use_short_trend_filter:   bool
+    short_adx_min:            float
+    short_sma_period:         int
+    adx_flat_threshold:       float
+    use_session_filter:       bool
+    blocked_sessions:         tuple[str, ...]
+    near_miss_rsi_band:       float
+    near_miss_sma_band:       float
 
 
 def _parse_config(raw: dict[str, Any]) -> _LoopConfig:
     return _LoopConfig(
-        symbol               = raw['symbol'],
-        timeframe            = raw['timeframe'],
-        limit                = raw.get('limit', 200),
-        interval             = raw['interval_seconds'],
-        balance              = raw.get('paper_balance', 10_000.0),
-        risk_pct             = raw.get('risk_pct', 0.02),
-        sl_pct_long          = raw.get('stop_loss_pct_long', 0.025),
-        tp_pct_long          = raw.get('take_profit_pct_long', 0.040),
-        sl_pct_short         = raw.get('stop_loss_pct_short', 0.035),
-        tp_pct_short         = raw.get('take_profit_pct_short', 0.060),
-        rsi_threshold        = raw.get('rsi_threshold', 40.0),
-        rsi_short_threshold  = raw.get('rsi_short_threshold', 55.0),
-        leverage             = raw.get('leverage', 1),
-        use_atr_exits        = raw.get('use_atr_exits', False),
-        atr_sl_multiplier    = raw.get('atr_sl_multiplier', 1.5),
-        atr_tp_multiplier    = raw.get('atr_tp_multiplier', 3.0),
-        use_trailing_stop    = raw.get('use_trailing_stop', False),
-        use_adx_filter       = raw.get('use_adx_filter', False),
-        adx_threshold        = raw.get('adx_threshold', 45.0),
-        use_trend_filter     = raw.get('use_trend_filter', False),
-        max_hold_hours       = raw.get('max_hold_hours', 0.0),
-        near_miss_rsi_band   = raw.get('near_miss_rsi_band', 0.0),
-        near_miss_sma_band   = raw.get('near_miss_sma_band', 0.0),
+        symbol                    = raw['symbol'],
+        timeframe                 = raw['timeframe'],
+        limit                     = raw.get('limit', 200),
+        interval                  = raw['interval_seconds'],
+        balance                   = raw.get('paper_balance', 10_000.0),
+        risk_pct                  = raw.get('risk_pct', 0.02),
+        sl_pct_long               = raw.get('stop_loss_pct_long', 0.025),
+        tp_pct_long               = raw.get('take_profit_pct_long', 0.040),
+        sl_pct_short              = raw.get('stop_loss_pct_short', 0.035),
+        tp_pct_short              = raw.get('take_profit_pct_short', 0.060),
+        rsi_threshold             = raw.get('rsi_threshold', 40.0),
+        rsi_short_threshold       = raw.get('rsi_short_threshold', 55.0),
+        leverage                  = raw.get('leverage', 1),
+        use_atr_exits             = raw.get('use_atr_exits', False),
+        atr_sl_multiplier         = raw.get('atr_sl_multiplier', 1.5),
+        atr_tp_multiplier         = raw.get('atr_tp_multiplier', 3.0),
+        use_trailing_stop         = raw.get('use_trailing_stop', False),
+        trailing_breakeven_pct    = raw.get('trailing_breakeven_pct', 0.008),
+        trailing_trail_pct        = raw.get('trailing_trail_pct', 0.012),
+        trailing_distance_pct     = raw.get('trailing_distance_pct', 0.004),
+        use_adx_filter            = raw.get('use_adx_filter', False),
+        adx_threshold             = raw.get('adx_threshold', 45.0),
+        use_trend_filter          = raw.get('use_trend_filter', False),
+        max_hold_hours            = raw.get('max_hold_hours', 0.0),
+        stalled_hours             = raw.get('stalled_hours', 0.0),
+        stalled_move_threshold    = raw.get('stalled_move_threshold', 0.005),
+        range_lookback_min        = raw.get('range_lookback_min', 0),
+        range_pct_threshold       = raw.get('range_pct_threshold', 0.003),
+        use_volatility_filter     = raw.get('use_volatility_filter', False),
+        volatility_lookback_hours = raw.get('volatility_lookback_hours', 48),
+        volatility_low_pct        = raw.get('volatility_low_pct', 20.0),
+        volatility_high_pct       = raw.get('volatility_high_pct', 80.0),
+        use_mtf_filter            = raw.get('use_mtf_filter', False),
+        mtf_15m_period            = raw.get('mtf_15m_period', 50),
+        mtf_require_15m           = raw.get('mtf_require_15m', True),
+        mtf_require_1h            = raw.get('mtf_require_1h', False),
+        use_short_trend_filter    = raw.get('use_short_trend_filter', False),
+        short_adx_min             = raw.get('short_adx_min', 20.0),
+        short_sma_period          = raw.get('short_sma_period', 50),
+        adx_flat_threshold        = raw.get('adx_flat_threshold', 18.0),
+        use_session_filter        = raw.get('use_session_filter', False),
+        blocked_sessions          = tuple(raw.get('blocked_sessions', ())),
+        near_miss_rsi_band        = raw.get('near_miss_rsi_band', 0.0),
+        near_miss_sma_band        = raw.get('near_miss_sma_band', 0.0),
     )
 
 
@@ -119,18 +168,13 @@ def _save_trade(trade: dict) -> None:
 
 
 def _atomic_or_direct_write(path: Path, data: str) -> None:
-    """Write *data* to *path* atomically, falling back to direct write on bind mounts.
-
-    Docker bind-mounts of single files cause os.replace to fail with EBUSY
-    because the target inode is held by the mount. In that case write
-    directly — less crash-safe but the only option for bind-mounted files.
-    """
+    """Write *data* to *path* atomically, falling back to direct write on bind mounts."""
     tmp = path.with_suffix('.tmp')
     try:
         tmp.write_text(data, encoding='utf-8')
         os.replace(tmp, path)
     except OSError as exc:
-        if exc.errno in (16, 18):  # EBUSY or EXDEV
+        if exc.errno in (16, 18):
             try:
                 tmp.unlink(missing_ok=True)
             except OSError:
@@ -140,6 +184,10 @@ def _atomic_or_direct_write(path: Path, data: str) -> None:
             raise
 
 
+def _is_paused() -> bool:
+    return _PAUSE_FILE.exists()
+
+
 def _update_health(close: float, rsi_val: float, state: BotState, daily_pnl: float) -> None:
     payload = {
         'last_tick_ms':  int(time.time() * 1000),
@@ -147,6 +195,7 @@ def _update_health(close: float, rsi_val: float, state: BotState, daily_pnl: flo
         'rsi':           round(rsi_val, 2),
         'state':         state.value,
         'daily_pnl_pct': round(daily_pnl * 100, 4),
+        'paused':        _is_paused(),
     }
     try:
         _atomic_or_direct_write(_HEALTH_FILE, json.dumps(payload))
@@ -155,25 +204,6 @@ def _update_health(close: float, rsi_val: float, state: BotState, daily_pnl: flo
 
 
 # ── SL/TP setup ────────────────────────────────────────────────────────────
-
-def _compute_sl_tp(
-    entry_price: float,
-    cfg: _LoopConfig,
-    atr_val: float | None,
-) -> tuple[float, float]:
-    """Decide absolute SL and TP prices at entry time.
-
-    ATR exits only apply when the flag is on and a valid ATR is available;
-    otherwise falls back to fixed-percentage exits.
-    """
-    if cfg.use_atr_exits and atr_val is not None and atr_val > 0:
-        sl_price = entry_price - cfg.atr_sl_multiplier * atr_val
-        tp_price = entry_price + cfg.atr_tp_multiplier * atr_val
-    else:
-        sl_price = entry_price * (1 - cfg.sl_pct_long)
-        tp_price = entry_price * (1 + cfg.tp_pct_long)
-    return sl_price, tp_price
-
 
 def _compute_sl_tp_for_side(
     entry_price: float,
@@ -194,12 +224,7 @@ def _compute_sl_tp_for_side(
 
 
 def _ensure_sl_tp(position: dict, cfg: _LoopConfig) -> dict:
-    """Back-fill sl_price/tp_price on positions opened before this upgrade.
-
-    Older positions persisted in bot_state.json do not carry SL/TP prices.
-    Synthesize them from fixed-pct config so the trailing-stop / exit logic
-    can run without KeyError.
-    """
+    """Back-fill sl_price/tp_price on positions opened before this upgrade."""
     if 'sl_price' in position and 'tp_price' in position:
         return position
     entry = position['entry_price']
@@ -226,6 +251,7 @@ def _open_position(
     sl_price: float,
     tp_price: float,
     side: str = 'long',
+    context: dict | None = None,
 ) -> str:
     position = {
         'side':        side,
@@ -242,13 +268,24 @@ def _open_position(
         side, close, qty, close * qty, sl_price, tp_price,
     )
     direction_emoji = '📈' if side == 'long' else '📉'
-    return (
+    msg = (
         f'{direction_emoji} <b>{side.upper()} POSITION OPENED</b>\n'
         f'Entry: ${close:,.2f}\n'
         f'Qty: {qty:.6f} BTC\n'
         f'Value: ${close * qty:,.2f} USDT\n'
         f'SL: ${sl_price:,.2f} | TP: ${tp_price:,.2f}'
     )
+    if context:
+        ctx_lines = []
+        if 'session' in context:
+            ctx_lines.append(f"Session: {context['session'].upper()}")
+        if 'adx' in context and context['adx'] is not None:
+            ctx_lines.append(f"ADX: {context['adx']:.1f}")
+        if 'trend_15m' in context and context['trend_15m'] is not None:
+            ctx_lines.append(f"15m trend: {'UP' if context['trend_15m'] else 'DOWN'}")
+        if ctx_lines:
+            msg += '\n' + ' | '.join(ctx_lines)
+    return msg
 
 
 def _close_position(
@@ -284,7 +321,6 @@ def _close_position(
         'exit_ts':     int(time.time() * 1000),
     }
     _save_trade(trade)
-    # register_trade receives pnl_pct / 100 for continuity with prior behaviour.
     risk_manager.register_trade(pnl_pct / 100)
 
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
@@ -311,11 +347,7 @@ def _close_position(
 def _compute_indicators(
     df: pd.DataFrame,
 ) -> tuple[float, float, float, float, float, float | None, float | None]:
-    """Returns (close, sma_val, rsi_val, volume, vol_sma, atr_val, adx_val).
-
-    atr_val and adx_val are None during warmup (Wilder smoothing produces NaN
-    until ~period bars have accumulated).
-    """
+    """Returns (close, sma_val, rsi_val, volume, vol_sma, atr_val, adx_val)."""
     close = float(df['close'].iloc[-1])
     sma_v = float(sma(df, period=_SMA_PERIOD).iloc[-1])
     rsi_v = float(rsi(df, period=_RSI_PERIOD).iloc[-1])
@@ -326,6 +358,36 @@ def _compute_indicators(
     adx_v_raw = adx(df, period=_ADX_PERIOD).iloc[-1]
     adx_v = float(adx_v_raw) if pd.notna(adx_v_raw) else None
     return close, sma_v, rsi_v, vol, vol_s, atr_v, adx_v
+
+
+def _compute_sma_safe(df: pd.DataFrame, period: int) -> float | None:
+    """Return last SMA(period) value or None during warmup or insufficient data."""
+    if len(df) < period:
+        return None
+    val = sma(df, period=period).iloc[-1]
+    return float(val) if pd.notna(val) else None
+
+
+def _compute_mtf_15m(df: pd.DataFrame, period: int) -> bool | None:
+    """Return last 15m-trend bullish flag, or None during warmup."""
+    if len(df) < period * 15:   # need at least period 15m bars
+        return None
+    try:
+        flag = higher_tf_trend_sma(df, tf='15min', period=period).iloc[-1]
+    except (ValueError, KeyError):
+        return None
+    return bool(flag) if pd.notna(flag) else None
+
+
+def _compute_mtf_1h(df: pd.DataFrame, period: int = 200) -> bool | None:
+    """Return last 1h-trend bullish flag, or None during warmup."""
+    if len(df) < period * 60:
+        return None
+    try:
+        flag = higher_tf_trend_ema(df, tf='1h', period=period).iloc[-1]
+    except (ValueError, KeyError):
+        return None
+    return bool(flag) if pd.notna(flag) else None
 
 
 def _log_tick(
@@ -348,6 +410,51 @@ def _log_tick(
     )
 
 
+def _entry_filters_block(
+    cfg: _LoopConfig,
+    side: str,
+    close: float,
+    sma_val: float,
+    sma50: float | None,
+    adx_val: float | None,
+    atr_val: float | None,
+    atr_bounds: tuple[float, float] | None,
+    htf_15m: bool | None,
+    htf_1h: bool | None,
+    last_closes: list[float],
+    now_ms: int,
+) -> str | None:
+    """Return a blocking reason string or None when entry is allowed."""
+    if cfg.use_session_filter and not is_session_allowed(now_ms, cfg.blocked_sessions):
+        return f'session_blocked={session_for_ts(now_ms)}'
+    if not passes_regime_filters(
+        trend_bullish=None, adx_val=adx_val,
+        adx_threshold=cfg.adx_threshold,
+        use_trend_filter=cfg.use_trend_filter,
+        use_adx_filter=cfg.use_adx_filter,
+    ):
+        return f'adx_overheated={adx_val}'
+    if cfg.range_lookback_min > 0 and len(last_closes) >= cfg.range_lookback_min:
+        window = last_closes[-cfg.range_lookback_min:]
+        if is_quiet_range(window, cfg.range_pct_threshold):
+            return 'quiet_range'
+    if cfg.use_volatility_filter and not passes_volatility_window(atr_val, atr_bounds):
+        return f'volatility_outside_window atr={atr_val}'
+    if cfg.use_mtf_filter and not is_mtf_aligned(
+        side, htf_15m, htf_1h,
+        require_15m=cfg.mtf_require_15m, require_1h=cfg.mtf_require_1h,
+    ):
+        return f'mtf_misaligned side={side} 15m={htf_15m} 1h={htf_1h}'
+    if side == 'short':
+        if cfg.use_short_trend_filter and not passes_short_trend_filter(
+            close, sma50, adx_val, cfg.short_adx_min,
+        ):
+            return f'short_trend_filter close={close} sma50={sma50} adx={adx_val}'
+        if shorts_disabled_in_flat(adx_val, cfg.adx_flat_threshold):
+            return f'shorts_disabled_in_flat adx={adx_val}'
+    return None
+
+
 def _handle_waiting_signal(
     state_manager: StateManager,
     risk_manager: RiskManager,
@@ -357,11 +464,16 @@ def _handle_waiting_signal(
     rsi_val: float,
     atr_val: float | None,
     adx_val: float | None,
+    sma50: float | None = None,
+    atr_bounds: tuple[float, float] | None = None,
+    htf_15m: bool | None = None,
+    htf_1h: bool | None = None,
+    last_closes: list[float] | None = None,
+    now_ms: int | None = None,
     macro_mode: str | None = None,
 ) -> str | None:
     long_sig = should_enter(close, sma_val, rsi_val, rsi_threshold=cfg.rsi_threshold)
     short_sig = should_enter_short(close, sma_val, rsi_val, rsi_threshold=cfg.rsi_short_threshold)
-    # NO_TRADE macro blocks longs only — positive funding is structurally short-friendly
     if macro_mode == NO_TRADE and long_sig:
         logger.info('macro_no_trade_blocks_long')
         long_sig = False
@@ -379,14 +491,17 @@ def _handle_waiting_signal(
         )
         return None
     side = 'long' if long_sig else 'short'
-    if not passes_regime_filters(
-        trend_bullish=None, adx_val=adx_val,
-        adx_threshold=cfg.adx_threshold,
-        use_trend_filter=cfg.use_trend_filter,
-        use_adx_filter=cfg.use_adx_filter,
-    ):
-        logger.info('regime_blocked side=%s adx=%s', side, adx_val)
+    closes_view = last_closes if last_closes is not None else []
+    ts_now = now_ms if now_ms is not None else int(time.time() * 1000)
+
+    block_reason = _entry_filters_block(
+        cfg, side, close, sma_val, sma50, adx_val, atr_val, atr_bounds,
+        htf_15m, htf_1h, closes_view, ts_now,
+    )
+    if block_reason is not None:
+        logger.info('entry_blocked side=%s reason=%s', side, block_reason)
         return None
+
     sl_price, tp_price = _compute_sl_tp_for_side(close, cfg, atr_val, side)
     effective_sl_pct = abs(close - sl_price) / close
     notional = risk_manager.position_size(
@@ -399,7 +514,74 @@ def _handle_waiting_signal(
         'entry_signal side=%s close=%.4f sma=%.4f rsi=%.2f sl=%.4f tp=%.4f',
         side, close, sma_val, rsi_val, sl_price, tp_price,
     )
-    return _open_position(state_manager, close, qty, sl_price, tp_price, side=side)
+    context = {
+        'session': session_for_ts(ts_now),
+        'adx':     adx_val,
+        'trend_15m': htf_15m,
+    }
+    return _open_position(state_manager, close, qty, sl_price, tp_price,
+                          side=side, context=context)
+
+
+def _maybe_apply_trailing(
+    state_manager: StateManager,
+    cfg: _LoopConfig,
+    position: dict,
+    close: float,
+) -> tuple[dict, str | None]:
+    """Update trailing stop if active. Returns (position, transition)."""
+    if not cfg.use_trailing_stop:
+        return position, None
+    new_sl, transition = update_trailing_stop_pct(
+        sl_price=position['sl_price'],
+        entry_price=position['entry_price'],
+        close=close,
+        side=position.get('side', 'long'),
+        breakeven_at_pct=cfg.trailing_breakeven_pct,
+        trail_at_pct=cfg.trailing_trail_pct,
+        trail_distance_pct=cfg.trailing_distance_pct,
+    )
+    if transition is not None:
+        old_sl = position['sl_price']
+        position['sl_price'] = new_sl
+        state_manager.set_position(position)
+        logger.info(
+            'trailing_stop_%s side=%s old_sl=%.4f new_sl=%.4f',
+            transition, position.get('side', 'long'), old_sl, new_sl,
+        )
+    return position, transition
+
+
+def _maybe_tighten_stalled(
+    state_manager: StateManager,
+    cfg: _LoopConfig,
+    position: dict,
+    closes_during_position: list[float],
+    now_ms: int,
+) -> dict:
+    """Halve SL/TP distances when the position has gone nowhere for too long."""
+    if cfg.stalled_hours <= 0 or position.get('stalled_tightened'):
+        return position
+    elapsed_h = (now_ms - position.get('ts', now_ms)) / 3_600_000
+    if elapsed_h < cfg.stalled_hours:
+        return position
+    if not is_position_stalled(closes_during_position, cfg.stalled_move_threshold):
+        return position
+    side = position.get('side', 'long')
+    new_sl, new_tp = tighten_sl_tp_for_stalled(
+        position['sl_price'], position['tp_price'],
+        position['entry_price'], side,
+    )
+    logger.info(
+        'stalled_tightened side=%s entry=%.4f sl_old=%.4f sl_new=%.4f tp_old=%.4f tp_new=%.4f',
+        side, position['entry_price'], position['sl_price'], new_sl,
+        position['tp_price'], new_tp,
+    )
+    position['sl_price'] = new_sl
+    position['tp_price'] = new_tp
+    position['stalled_tightened'] = True
+    state_manager.set_position(position)
+    return position
 
 
 def _handle_in_position(
@@ -408,36 +590,30 @@ def _handle_in_position(
     cfg: _LoopConfig,
     close: float,
     atr_val: float | None,
-) -> str | None:
+    closes_during_position: list[float] | None = None,
+    now_ms: int | None = None,
+) -> tuple[str | None, str | None] | str | None:
+    """Returns (notification, trailing_transition).
+
+    Backward-compat: when called without closes_during_position/now_ms (legacy
+    test signature), returns a single notification string instead of a tuple.
+    """
+    legacy_call = closes_during_position is None and now_ms is None
+    if closes_during_position is None:
+        closes_during_position = []
+    if now_ms is None:
+        now_ms = int(time.time() * 1000)
     position = state_manager.get_position()
     if position is None:
         logger.error('state=IN_POSITION but no position found, resetting')
         state_manager.set_state(BotState.WAITING_SIGNAL)
-        return None
+        return None if legacy_call else (None, None)
     position = _ensure_sl_tp(position, cfg)
     side = position.get('side', 'long')
 
-    if cfg.use_trailing_stop and atr_val is not None and atr_val > 0:
-        if side == 'long':
-            new_sl = update_trailing_stop(
-                sl_price=position['sl_price'], entry_price=position['entry_price'],
-                tp_price=position['tp_price'], close=close, atr_val=atr_val,
-            )
-            if new_sl > position['sl_price']:
-                logger.info('trailing_stop_raised side=long old_sl=%.4f new_sl=%.4f',
-                            position['sl_price'], new_sl)
-                position['sl_price'] = new_sl
-                state_manager.set_position(position)
-        else:
-            new_sl = update_trailing_stop_short(
-                sl_price=position['sl_price'], entry_price=position['entry_price'],
-                tp_price=position['tp_price'], close=close, atr_val=atr_val,
-            )
-            if new_sl < position['sl_price']:
-                logger.info('trailing_stop_lowered side=short old_sl=%.4f new_sl=%.4f',
-                            position['sl_price'], new_sl)
-                position['sl_price'] = new_sl
-                state_manager.set_position(position)
+    position, transition = _maybe_apply_trailing(state_manager, cfg, position, close)
+    position = _maybe_tighten_stalled(state_manager, cfg, position,
+                                      closes_during_position, now_ms)
 
     if side == 'long':
         pnl_usdt, pnl_pct = calc_pnl(close, position['entry_price'], position['qty'])
@@ -449,16 +625,28 @@ def _handle_in_position(
     )
     reason = check_exit_price(close, position['sl_price'], position['tp_price'], side=side)
     if reason is None and should_exit_time(
-        int(position.get('ts', 0)), int(time.time() * 1000), cfg.max_hold_hours,
+        int(position.get('ts', 0)), now_ms, cfg.max_hold_hours,
     ):
         reason = 'time_exit'
         logger.info(
             'time_exit triggered side=%s held_hours=%.1f',
-            side, (time.time() * 1000 - position.get('ts', 0)) / 3_600_000,
+            side, (now_ms - position.get('ts', 0)) / 3_600_000,
         )
     if reason:
-        return _close_position(state_manager, risk_manager, close, reason)
-    return None
+        notif = _close_position(state_manager, risk_manager, close, reason)
+        return notif if legacy_call else (notif, transition)
+    return None if legacy_call else (None, transition)
+
+
+# ── ATR / closes history (per-process, seeded from buffer each tick) ─────
+
+class _LoopState:
+    """Mutable state held across ticks: ATR history, in-position closes."""
+
+    def __init__(self) -> None:
+        self.atr_history: deque[float] = deque(maxlen=_ATR_HISTORY_MAXLEN)
+        self.position_closes: deque[float] = deque(maxlen=_POS_CLOSES_MAXLEN)
+        self.last_pos_ts: int = 0
 
 
 async def _process_tick(
@@ -467,6 +655,7 @@ async def _process_tick(
     risk_manager: RiskManager,
     cfg: _LoopConfig,
     candles: list[dict[str, Any]],
+    loop_state: _LoopState,
     macro_mode: str | None = None,
 ) -> None:
     buffer.add_many(candles)
@@ -475,33 +664,72 @@ async def _process_tick(
         return
     df = buffer.to_dataframe()
     close, sma_v, rsi_v, volume, vol_s, atr_v, adx_v = _compute_indicators(df)
+    sma50 = _compute_sma_safe(df, cfg.short_sma_period)
     bot_state = state_manager.get_state()
+    now_ms = int(time.time() * 1000)
     _log_tick(
         cfg.symbol, close, sma_v, rsi_v,
         volume / vol_s if vol_s > 0 else 0.0, atr_v, adx_v, bot_state,
     )
     _update_health(close, rsi_v, bot_state, risk_manager.get_daily_pnl())
 
-    notification: str | None = None
-    if bot_state == BotState.WAITING_SIGNAL:
-        notification = _handle_waiting_signal(
-            state_manager, risk_manager, cfg, close, sma_v, rsi_v, atr_v, adx_v,
-            macro_mode=macro_mode,
-        )
-        if notification is None and cfg.near_miss_rsi_band > 0:
-            miss = near_miss_reason(
-                close, sma_v, rsi_v,
-                rsi_long_threshold=cfg.rsi_threshold,
-                rsi_short_threshold=cfg.rsi_short_threshold,
-                rsi_band=cfg.near_miss_rsi_band,
-                sma_band_frac=cfg.near_miss_sma_band,
-            )
-            if miss is not None:
-                logger.info('near_miss %s', miss)
-                await notify_near_miss(miss, close, rsi_v, sma_v)
-    elif bot_state == BotState.IN_POSITION:
-        notification = _handle_in_position(state_manager, risk_manager, cfg, close, atr_v)
+    if atr_v is not None:
+        loop_state.atr_history.append(atr_v)
+    atr_bounds = atr_percentile_bounds(
+        list(loop_state.atr_history),
+        low_p=cfg.volatility_low_pct, high_p=cfg.volatility_high_pct,
+    ) if cfg.use_volatility_filter else None
 
+    htf_15m = _compute_mtf_15m(df, cfg.mtf_15m_period) if cfg.use_mtf_filter else None
+    htf_1h  = _compute_mtf_1h(df) if cfg.use_mtf_filter and cfg.mtf_require_1h else None
+
+    last_closes: list[float] = [float(c) for c in df['close'].tolist()]
+
+    notification: str | None = None
+    transition: str | None = None
+    if bot_state == BotState.WAITING_SIGNAL:
+        if _is_paused():
+            logger.info('bot_paused — skipping entry evaluation')
+        else:
+            notification = _handle_waiting_signal(
+                state_manager, risk_manager, cfg, close, sma_v, rsi_v,
+                atr_v, adx_v,
+                sma50=sma50, atr_bounds=atr_bounds,
+                htf_15m=htf_15m, htf_1h=htf_1h,
+                last_closes=last_closes, now_ms=now_ms,
+                macro_mode=macro_mode,
+            )
+            if notification is None and cfg.near_miss_rsi_band > 0:
+                miss = near_miss_reason(
+                    close, sma_v, rsi_v,
+                    rsi_long_threshold=cfg.rsi_threshold,
+                    rsi_short_threshold=cfg.rsi_short_threshold,
+                    rsi_band=cfg.near_miss_rsi_band,
+                    sma_band_frac=cfg.near_miss_sma_band,
+                )
+                if miss is not None:
+                    logger.info('near_miss %s', miss)
+                    await notify_near_miss(miss, close, rsi_v, sma_v)
+        # reset position closes when waiting
+        loop_state.position_closes.clear()
+        loop_state.last_pos_ts = 0
+    elif bot_state == BotState.IN_POSITION:
+        position = state_manager.get_position()
+        if position is not None:
+            pos_ts = int(position.get('ts', 0))
+            if pos_ts != loop_state.last_pos_ts:
+                # New position — reset the running closes
+                loop_state.position_closes.clear()
+                loop_state.last_pos_ts = pos_ts
+            loop_state.position_closes.append(close)
+        notification, transition = _handle_in_position(
+            state_manager, risk_manager, cfg, close, atr_v,
+            list(loop_state.position_closes), now_ms,
+        )
+
+    if transition is not None and notification is None:
+        await notify_trailing(transition, close,
+                              state_manager.get_position() or {})
     if notification:
         await notify(notification)
 
@@ -517,35 +745,20 @@ async def trading_loop(
     macro_filter: MacroFilter | None = None,
     protections: ProtectionStack | None = None,
 ) -> None:
-    """Main trading loop. Streams candles via WebSocket; falls back to REST polling.
-
-    Expected config keys:
-        symbol            str    e.g. 'BTC/USDT'
-        timeframe         str    e.g. '1m'
-        limit             int    candles per fetch/stream page (default 200)
-        interval_seconds  float  REST fallback polling interval
-        paper_balance     float  simulated USDT balance
-        risk_pct          float  fraction of balance *at risk per trade*
-                                  (notional = balance × risk_pct / sl_pct)
-        rsi_threshold     float  RSI entry threshold (default 40.0)
-        stop_loss_pct     float  fixed-pct stop loss (default 0.025)
-        take_profit_pct   float  fixed-pct take profit (default 0.040)
-        use_atr_exits     bool   if True use ATR-scaled SL/TP instead of fixed %
-        atr_sl_multiplier float  SL distance in ATRs when use_atr_exits
-        atr_tp_multiplier float  TP distance in ATRs when use_atr_exits
-        use_trailing_stop bool   enable three-stage trailing stop
-        circuit_breaker_pct float daily drawdown limit (default 0.03)
-    """
+    """Main trading loop. Streams candles via WebSocket; falls back to REST polling."""
     cfg = _parse_config(config)
     logger.info(
         'trading_loop started symbol=%s timeframe=%s interval=%ss balance=%.2f '
         'risk_pct=%.4f use_atr_exits=%s use_trailing_stop=%s '
-        'use_adx_filter=%s adx_threshold=%.1f use_trend_filter=%s',
+        'use_adx_filter=%s adx_threshold=%.1f use_mtf_filter=%s '
+        'use_volatility_filter=%s use_session_filter=%s',
         cfg.symbol, cfg.timeframe, cfg.interval, cfg.balance,
         cfg.risk_pct, cfg.use_atr_exits, cfg.use_trailing_stop,
-        cfg.use_adx_filter, cfg.adx_threshold, cfg.use_trend_filter,
+        cfg.use_adx_filter, cfg.adx_threshold, cfg.use_mtf_filter,
+        cfg.use_volatility_filter, cfg.use_session_filter,
     )
 
+    loop_state = _LoopState()
     _circuit_breaker_notified = False
 
     async def _on_candles(candles: list[dict[str, Any]]) -> None:
@@ -572,7 +785,7 @@ async def trading_loop(
                 logger.info('protections_blocked reason=%s', reason)
                 return
         await _process_tick(buffer, state_manager, risk_manager, cfg, candles,
-                            macro_mode=macro_mode)
+                            loop_state, macro_mode=macro_mode)
 
     await client.watch_candles(
         cfg.symbol, cfg.timeframe, _on_candles,

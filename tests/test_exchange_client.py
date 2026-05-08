@@ -201,7 +201,10 @@ class TestNonRetryableErrors(unittest.IsolatedAsyncioTestCase):
 class TestCredentials(unittest.TestCase):
 
     def test_missing_api_key_raises(self):
+        # Demo mode requires credentials — paper mode does not
         def _getenv_no_key(var: str, default=None):
+            if var == 'BINANCE_MODE':
+                return 'demo'
             return None if var == 'BINANCE_FUTURES_API_KEY' else os.environ.get(var, default)
 
         with patch('exchange.client.os.getenv', side_effect=_getenv_no_key):
@@ -211,9 +214,44 @@ class TestCredentials(unittest.TestCase):
 
     def test_missing_api_secret_raises(self):
         def _getenv_no_secret(var: str, default=None):
+            if var == 'BINANCE_MODE':
+                return 'demo'
             return None if var == 'BINANCE_FUTURES_API_SECRET' else os.environ.get(var, default)
 
         with patch('exchange.client.os.getenv', side_effect=_getenv_no_secret):
+            from exchange.client import BinanceClient
+            with self.assertRaises(RuntimeError):
+                BinanceClient()
+
+    def test_paper_mode_does_not_require_credentials(self):
+        """Default paper mode initializes without API keys."""
+        def _getenv_no_creds(var: str, default=None):
+            if var == 'BINANCE_MODE':
+                return 'paper'
+            if var in ('BINANCE_FUTURES_API_KEY', 'BINANCE_FUTURES_API_SECRET'):
+                return None
+            return os.environ.get(var, default)
+
+        with patch('exchange.client.os.getenv', side_effect=_getenv_no_creds), \
+             patch('ccxt.binanceusdm'):
+            from exchange.client import BinanceClient
+            client = BinanceClient()
+            self.assertEqual(client._mode, 'paper')
+
+    def test_live_mode_requires_explicit_ack(self):
+        """live mode without LIVE_ACK=I_UNDERSTAND raises."""
+        def _getenv(var: str, default=None):
+            if var == 'BINANCE_MODE':
+                return 'live'
+            if var == 'BINANCE_FUTURES_API_KEY':
+                return 'k'
+            if var == 'BINANCE_FUTURES_API_SECRET':
+                return 's'
+            if var == 'LIVE_ACK':
+                return ''
+            return os.environ.get(var, default)
+
+        with patch('exchange.client.os.getenv', side_effect=_getenv):
             from exchange.client import BinanceClient
             with self.assertRaises(RuntimeError):
                 BinanceClient()
@@ -409,9 +447,14 @@ class TestBinanceClientFutures(unittest.TestCase):
         import os
         os.environ['BINANCE_FUTURES_API_KEY'] = 'fake_key'
         os.environ['BINANCE_FUTURES_API_SECRET'] = 'fake_secret'
-        # Also keep spot keys to avoid breaking other tests if they share env.
+        # demo mode requires keys and triggers set_leverage / set_sandbox_mode
+        os.environ['BINANCE_MODE'] = 'demo'
         os.environ.setdefault('BINANCE_API_KEY', 'fake_spot')
         os.environ.setdefault('BINANCE_API_SECRET', 'fake_spot')
+
+    def tearDown(self):
+        import os
+        os.environ.pop('BINANCE_MODE', None)
 
     def test_uses_binanceusdm_class(self):
         from unittest.mock import patch, MagicMock
@@ -456,8 +499,8 @@ class TestBinanceClientFutures(unittest.TestCase):
 
     def test_raises_when_futures_credentials_missing(self):
         import os
-        from unittest.mock import patch, MagicMock
-        # Temporarily remove futures key
+        from unittest.mock import patch
+        # demo mode (set in setUp) demands credentials
         saved = os.environ.pop('BINANCE_FUTURES_API_KEY', None)
         try:
             with patch('ccxt.binanceusdm'):
