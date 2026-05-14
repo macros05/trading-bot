@@ -15,6 +15,8 @@ data/bot_state.json
 data/bot_health.json
 data/trades_history.json
 data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # Runtime logs (rotated locally)
 *.log
