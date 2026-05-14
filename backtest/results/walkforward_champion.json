@@ -1,0 +1,96 @@
+{
+  "period": {
+    "from_ms": 1761511680000,
+    "to_ms": 1777063740000,
+    "candles": 259202,
+    "from": "2025-10-26T20:48:00+00:00",
+    "to": "2026-04-24T20:49:00+00:00"
+  },
+  "symbol": "BTC/USDT",
+  "walk_forward": {
+    "config": {
+      "train_months": 3,
+      "test_months": 1,
+      "step_months": 1
+    },
+    "num_folds": 3,
+    "folds": [
+      {
+        "label": "walk_forward",
+        "num_trades": 1,
+        "net_pnl_usdt": -116.7758,
+        "net_pnl_pct": -1.1678,
+        "gross_pnl_usdt": -108.7758,
+        "fees_paid_usdt": 8.0,
+        "slippage_cost_usdt": 3.9456,
+        "win_rate_pct": 0.0,
+        "max_drawdown_pct": 1.1678,
+        "sharpe_ratio": 0.0,
+        "profit_factor": 0.0,
+        "avg_win_usdt": 0.0,
+        "avg_loss_usdt": -116.7758,
+        "best_trade": -116.7758,
+        "worst_trade": -116.7758,
+        "fold": 0,
+        "test_from_ms": 1769287680000,
+        "test_to_ms": 1771879620000,
+        "test_candles": 43200
+      },
+      {
+        "label": "walk_forward",
+        "num_trades": 2,
+        "net_pnl_usdt": 310.8657,
+        "net_pnl_pct": 3.1087,
+        "gross_pnl_usdt": 326.9879,
+        "fees_paid_usdt": 16.1222,
+        "slippage_cost_usdt": 8.2247,
+        "win_rate_pct": 100.0,
+        "max_drawdown_pct": 0.0,
+        "sharpe_ratio": 40.4948,
+        "profit_factor": null,
+        "avg_win_usdt": 155.4328,
+        "avg_loss_usdt": 0.0,
+        "best_trade": 158.147,
+        "worst_trade": 152.7187,
+        "fold": 1,
+        "test_from_ms": 1771879680000,
+        "test_to_ms": 1774471620000,
+        "test_candles": 43200
+      },
+      {
+        "label": "walk_forward",
+        "num_trades": 2,
+        "net_pnl_usdt": 312.6951,
+        "net_pnl_pct": 3.127,
+        "gross_pnl_usdt": 328.8211,
+        "fees_paid_usdt": 16.126,
+        "slippage_cost_usdt": 8.2275,
+        "win_rate_pct": 100.0,
+        "max_drawdown_pct": 0.0,
+        "sharpe_ratio": 98.3519,
+        "profit_factor": null,
+        "avg_win_usdt": 156.3475,
+        "avg_loss_usdt": 0.0,
+        "best_trade": 157.4716,
+        "worst_trade": 155.2235,
+        "fold": 2,
+        "test_from_ms": 1774471680000,
+        "test_to_ms": 1777063620000,
+        "test_candles": 43200
+      }
+    ],
+    "aggregate": {
+      "num_trades": 5,
+      "initial_balance": 10000.0,
+      "final_balance": 10506.785,
+      "net_pnl_usdt": 506.785,
+      "net_pnl_pct": 5.0678,
+      "win_rate_pct": 80.0,
+      "sharpe_ratio": 0.8311,
+      "max_drawdown_pct": 1.1678,
+      "profit_factor": 5.3398,
+      "fees_paid_usdt": 40.2482,
+      "slippage_cost_usdt": 10.3407
+    }
+  }
+}

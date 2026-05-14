@@ -156,4 +156,8 @@ BOT_CONFIG = {
     'adaptive_kelly':           ADAPTIVE_KELLY,
     'near_miss_rsi_band':       NEAR_MISS_RSI_BAND,
     'near_miss_sma_band':       NEAR_MISS_SMA_BAND,
+    # Telegram: when False, only daily/weekly summaries and critical alerts
+    # (circuit breaker, watchdog stale, daily reset) are sent. Per-trade
+    # opens/closes, trailing transitions and near-miss diagnostics are silenced.
+    'notify_per_trade':         False,
 }

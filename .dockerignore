@@ -1,0 +1,15 @@
+venv
+.venv
+__pycache__
+*.pyc
+.git
+.gitignore
+README.md
+CLAUDE.md
+.claude
+tests
+backtest
+*.log
+*.log.*
+bot.log*
+api.log*

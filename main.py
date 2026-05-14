@@ -202,6 +202,8 @@ async def main() -> None:
     daily_sum_task   = asyncio.create_task(_daily_summary_22utc())
     weekly_rpt_task  = asyncio.create_task(_weekly_report_monday_8utc())
     readiness_task   = asyncio.create_task(_readiness_check_loop())
+    from telegram_listener import run as run_telegram_listener
+    tg_task          = asyncio.create_task(run_telegram_listener())
     asyncio.create_task(_send_startup_notification())
 
     try:
@@ -235,6 +237,7 @@ async def main() -> None:
         daily_sum_task.cancel()
         weekly_rpt_task.cancel()
         readiness_task.cancel()
+        tg_task.cancel()
         await client.close()
 
 

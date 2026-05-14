@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$CLAUDE_TOOL_INPUT_file_path\" in *.env|*/bot_state.json|*/trades_history.json|*/bot_health.json) echo 'BLOCKED: protected file — edit manually if needed' >&2; exit 2;; esac"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "FILE=\"$CLAUDE_TOOL_INPUT_file_path\"; case \"$FILE\" in */core/*|*/risk/*|*/exchange/*|*/strategy/*) MODULE=$(basename \"$FILE\" .py); TEST=\"tests/test_${MODULE}.py\"; [ -f \"$TEST\" ] && echo \"Running $TEST...\" && venv/bin/pytest \"$TEST\" -x -q 2>&1 | tail -5;; esac"
+          }
+        ]
+      }
+    ]
+  }
+}

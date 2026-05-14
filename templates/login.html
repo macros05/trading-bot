@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trading Bot · Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        colors: {
+          'bg':   '#0F172A',
+          's1':   '#1E293B',
+          's2':   '#162032',
+          'bdr':  '#334155',
+          'acc':  '#38BDF8',
+          'accd': '#0ea5e9',
+          'txt':  '#E2E8F0',
+          'dim':  '#94A3B8',
+          'mut':  '#475569',
+          'red':  '#EF4444',
+        },
+        fontFamily: { mono: ['"Courier New"', 'Courier', 'monospace'] },
+        keyframes: {
+          cardIn: {
+            from: { opacity: '0', transform: 'translateY(14px) scale(.98)' },
+            to:   { opacity: '1', transform: 'translateY(0) scale(1)' },
+          },
+          shake: {
+            '0%,100%': { transform: 'translateX(0)' },
+            '20%':     { transform: 'translateX(-5px)' },
+            '40%':     { transform: 'translateX(5px)' },
+            '60%':     { transform: 'translateX(-3px)' },
+            '80%':     { transform: 'translateX(3px)' },
+          },
+        },
+        animation: {
+          cardIn: 'cardIn .28s cubic-bezier(0.4,0,0.2,1)',
+          shake:  'shake .35s ease',
+        },
+      }}
+    }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body::before {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 500px;
+      height: 320px;
+      background: radial-gradient(ellipse, rgba(56,189,248,.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .field-input:focus {
+      border-color: #0ea5e9;
+      box-shadow: 0 0 0 3px rgba(56,189,248,.15);
+      outline: none;
+    }
+  </style>
+</head>
+<body class="bg-bg text-txt font-mono min-h-screen flex items-center justify-center px-4 antialiased relative"
+      style="padding-bottom:max(24px,env(safe-area-inset-bottom))">
+
+  <div class="w-full max-w-sm bg-s1 border border-bdr rounded-2xl p-10 flex flex-col gap-7
+              shadow-[0_24px_64px_rgba(0,0,0,.5)] animate-cardIn relative">
+
+    <!-- Header -->
+    <div class="flex flex-col items-center gap-4 text-center">
+      <div class="w-14 h-14 rounded-xl flex items-center justify-center text-2xl font-bold text-bg
+                  shadow-[0_4px_20px_rgba(56,189,248,.3)]"
+           style="background:linear-gradient(135deg,#38BDF8,#6366f1)">⬡</div>
+      <div>
+        <h1 class="text-lg font-bold tracking-widest text-txt uppercase">TRADING BOT</h1>
+        <p class="text-xs text-dim mt-1.5 tracking-wide">Introduce tus credenciales para acceder</p>
+      </div>
+    </div>
+
+    <!-- Error -->
+    {% if error %}
+    <div class="flex items-center justify-center gap-2 animate-shake
+                bg-[rgba(239,68,68,.08)] border border-[rgba(239,68,68,.3)]
+                rounded-lg px-4 py-2.5 text-xs text-red text-center tracking-wide">
+      ⚠ {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Form -->
+    <form method="post" action="/login" class="flex flex-col gap-4">
+
+      <div class="flex flex-col gap-1.5">
+        <label for="username" class="text-[10px] font-bold uppercase tracking-[.12em] text-mut">
+          Usuario
+        </label>
+        <input type="text" id="username" name="username"
+               autocomplete="username" value="{{ username }}" autofocus required
+               class="field-input w-full bg-s2 border border-bdr rounded-lg px-4 py-3
+                      text-[14px] text-txt min-h-[46px] transition-all placeholder:text-mut" />
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="password" class="text-[10px] font-bold uppercase tracking-[.12em] text-mut">
+          Contraseña
+        </label>
+        <input type="password" id="password" name="password"
+               autocomplete="current-password" required
+               class="field-input w-full bg-s2 border border-bdr rounded-lg px-4 py-3
+                      text-[14px] text-txt min-h-[46px] transition-all placeholder:text-mut" />
+      </div>
+
+      <label class="flex items-center gap-2.5 cursor-pointer select-none min-h-[40px]">
+        <input type="checkbox" name="remember" value="1"
+               class="w-4 h-4 flex-shrink-0 cursor-pointer accent-acc" />
+        <span class="text-xs text-dim tracking-wide">Recordarme 30 días</span>
+      </label>
+
+      <button type="submit"
+              class="w-full text-bg font-bold text-sm tracking-widest uppercase rounded-lg
+                     min-h-[48px] mt-1 transition-all active:scale-[.97]
+                     hover:opacity-90"
+              style="background:linear-gradient(135deg,#38BDF8,#6366f1);
+                     box-shadow:0 4px 16px rgba(56,189,248,.25)">
+        ENTRAR →
+      </button>
+
+    </form>
+  </div>
+
+</body>
+</html>

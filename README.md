@@ -17,7 +17,10 @@ All strategy decisions were validated through a 90-day backtest on 129 602 one-m
 | Macro signals | aiohttp · Binance Futures public API · CoinDesk RSS · Gemini 1.5 Flash |
 | Configuration | python-dotenv (.env file, no secrets in source) |
 | Tests | unittest (IsolatedAsyncioTestCase) — 227 tests, 0 failures |
-| Target host | GCP e2-micro, bare Python (no Docker on this VM) |
+| HTTP API | FastAPI + uvicorn (`api.py`, port 8001) — cookie-auth dashboard backend |
+| Notifications | Telegram bot (`notifications.py`) — trade fills + circuit-breaker alerts |
+| Deployment | Docker Compose (multi-service: `trading_bot`, `trading_api`, `trading_dashboard`) |
+| Frontend | Next.js 14 + TypeScript + Tailwind + Recharts — separate repo `trading-bot-dashboard` |
 
 ---
 
@@ -244,10 +247,15 @@ python -m unittest discover -s tests -q
 Downloads 90 days of 1-minute OHLCV from Binance production (public endpoint, no auth required). Allow ~5 minutes for the full data fetch.
 
 ```bash
-python -m backtest.engine
+python -m backtest.engine                    # original 90-day sweep
+python -m backtest.cli                       # convenience entrypoint with consistent naming
+python -m backtest.advanced                  # extended sweep with ATR/ADX overlays
+python -m backtest.adx_sweep                 # ADX threshold grid
+python -m backtest.multi_symbol              # BTC / ETH / SOL parameter portability
+python -m backtest.walk_forward              # 24-month walk-forward validation
 ```
 
-Results are written to `backtest/results/`:
+Results are written to `backtest/results/`. The repo ships with the latest snapshot of each runner; use the `/run-backtest` slash command (skill `run-backtest`) to produce versioned `{runner}_v{N+1}.json` files with a delta vs. the previous run.
 
 | File | Contents |
 |------|---------|
@@ -256,16 +264,34 @@ Results are written to `backtest/results/`:
 | `symbol_report.json` | Multi-symbol comparison (BTC / ETH / SOL) |
 | `strategy_comp_report.json` | RSI+SMA vs MeanRev vs Combined |
 | `volume_comp_report.json` | Volume confirmation experiment |
+| `advanced_report*.json` | Extended sweep with ATR/ADX overlays |
+| `adx_sweep_v*.json` | ADX threshold grid |
+| `multi_symbol_v*.json` | Multi-symbol parameter sweep |
+| `walkforward_*.json` | Walk-forward validation (rolling train/test) |
 
 ### Run the bot
 
+Two supported modes:
+
+**Bare Python (development / debugging):**
+
 ```bash
-python main.py
+python main.py                                       # bot loop
+uvicorn api:app --host 0.0.0.0 --port 8001           # dashboard backend
 ```
 
-The bot connects to Binance Testnet, streams BTC/USDT 1-minute candles via WebSocket, and paper-trades against a simulated balance. State is flushed to `bot_state.json` on every FSM transition. Closed trades are appended to `trades_history.json`.
+**Docker Compose (production):**
 
-Stop with `Ctrl+C` — `CancelledError` is caught in `main()`, `client.close()` is called before exit.
+```bash
+docker compose up -d trading_bot trading_api trading_dashboard
+docker compose logs -f trading_bot
+```
+
+The Docker setup is defined in `Dockerfile` (multi-stage: `bot` and `api` targets) and orchestrated by `/root/docker-compose.yml`, which mounts `data/bot_state.json`, `data/bot_health.json`, `data/trades_history.json`, and `bot.log` from the host so persistence survives container restarts. The frontend (`trading_dashboard`, Next.js) runs in a sibling container that proxies `/api/*` to `trading_api:8001` over the internal Docker network.
+
+In either mode, the bot connects to Binance Testnet, streams BTC/USDT 1-minute candles via WebSocket, and paper-trades against a simulated balance. State is flushed to `bot_state.json` on every FSM transition. Closed trades are appended to `trades_history.json`.
+
+Stop with `Ctrl+C` (bare) or `docker compose stop trading_bot` (Docker) — `CancelledError` is caught in `main()`, `client.close()` is called before exit.
 
 ---
 
@@ -274,7 +300,11 @@ Stop with `Ctrl+C` — `CancelledError` is caught in `main()`, `client.close()` 
 ```
 trading-bot/
 ├── main.py                    # entry point — wires components, runs asyncio.run()
+├── api.py                     # FastAPI dashboard backend (port 8001)
+├── notifications.py           # Telegram alerts on trade fills + circuit-breaker
 ├── config.py                  # BOT_CONFIG dict
+├── Dockerfile                 # multi-stage: `bot` and `api` build targets
+├── .dockerignore
 ├── .env                       # credentials (gitignored)
 ├── requirements.txt
 │
@@ -287,18 +317,29 @@ trading-bot/
 │   └── macro_filter.py        # MacroFilter: funding rate + Gemini sentiment
 │
 ├── strategy/
-│   ├── indicators.py          # sma, ema, rsi, volume_sma — pure pandas functions
+│   ├── indicators.py          # sma, ema, rsi, volume_sma, atr, adx — pure pandas functions
 │   └── signals.py             # should_enter, check_exit, calc_pnl — pure Python
 │
 ├── data/
-│   └── candles.py             # CandleBuffer: deque(maxlen) + to_dataframe()
+│   ├── candles.py             # CandleBuffer: deque(maxlen) + to_dataframe()
+│   ├── bot_state.json         # FSM state + open position (mounted into containers)
+│   ├── bot_health.json        # last tick snapshot (timestamp, close, RSI, state, daily PnL)
+│   └── trades_history.json    # append-only closed-trade log
 │
 ├── risk/
 │   └── manager.py             # RiskManager: circuit breaker + position sizing
 │
 ├── backtest/
-│   ├── engine.py              # full sweep engine — 5 independent result files
-│   └── results/               # JSON outputs from last run
+│   ├── engine.py              # original 90-day sweep
+│   ├── cli.py                 # versioned-output entrypoint used by `/run-backtest`
+│   ├── advanced.py            # ATR/ADX overlay sweep
+│   ├── adx_sweep.py           # ADX threshold grid
+│   ├── multi_symbol.py        # BTC / ETH / SOL parameter portability
+│   ├── walk_forward.py        # rolling train/test validation
+│   └── results/               # JSON outputs (versioned: {runner}_v{N+1}.json)
+│
+├── paper_forward_test/        # daily snapshots from live forward-test runs
+├── static/, templates/        # Jinja fallback UI for `api.py` (legacy; React frontend is canonical)
 │
 └── tests/                     # 227 unit + async tests
     ├── test_loop.py
@@ -311,6 +352,8 @@ trading-bot/
     ├── test_risk_manager.py
     └── test_macro_filter.py
 ```
+
+The Next.js dashboard lives in a sibling repository at `/root/trading-bot-dashboard/` (Next.js 14, App Router, Tailwind, Recharts, SWR with 5-second polling). It rewrites `/api/*` to `BOT_API_URL` (default `http://trading_api:8001` inside the Docker network) so the session cookie issued by `api.py` is preserved.
 
 ---
 
@@ -328,5 +371,7 @@ trading-bot/
 | Circuit breaker | −3 % daily drawdown |
 | Transport | WebSocket (ccxt.pro), REST fallback after 5 failures |
 | MacroFilter | Disabled by default (requires `GEMINI_API_KEY`) |
+| Runtime | Docker (`trading_bot` container) — `restart: always` |
+| Dashboard | `trading_dashboard` (Next.js, port 3001) → `trading_api` (FastAPI, port 8001) |
 
 The bot cannot place real orders. `BinanceClient.__init__` calls `set_sandbox_mode(True)` unconditionally, routing all requests to `testnet.binance.vision`. Live trading requires implementing `place_order_safe()` in `exchange/client.py` with exchange-side confirmation before removing the sandbox flag.

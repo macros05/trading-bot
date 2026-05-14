@@ -1,0 +1,134 @@
+{
+  "months": 6,
+  "symbols": {
+    "BTC/USDT": {
+      "baseline": {
+        "label": "baseline",
+        "num_trades": 15,
+        "net_pnl_usdt": 689.3118,
+        "net_pnl_pct": 6.8931,
+        "gross_pnl_usdt": 810.9162,
+        "fees_paid_usdt": 121.6044,
+        "slippage_cost_usdt": 61.2079,
+        "win_rate_pct": 60.0,
+        "max_drawdown_pct": 4.6921,
+        "sharpe_ratio": 0.3297,
+        "profit_factor": 1.9672,
+        "avg_win_usdt": 155.7804,
+        "avg_loss_usdt": -118.7853,
+        "best_trade": 162.2576,
+        "worst_trade": -139.0527
+      },
+      "champion": {
+        "label": "champion",
+        "num_trades": 5,
+        "net_pnl_usdt": 483.4117,
+        "net_pnl_pct": 4.8341,
+        "gross_pnl_usdt": 523.9379,
+        "fees_paid_usdt": 40.5262,
+        "slippage_cost_usdt": 20.5252,
+        "win_rate_pct": 80.0,
+        "max_drawdown_pct": 1.3423,
+        "sharpe_ratio": 0.7422,
+        "profit_factor": 4.5478,
+        "avg_win_usdt": 154.9168,
+        "avg_loss_usdt": -136.2556,
+        "best_trade": 158.3732,
+        "worst_trade": -136.2556
+      },
+      "candles": 259202
+    },
+    "ETH/USDT": {
+      "baseline": {
+        "label": "baseline",
+        "num_trades": 23,
+        "net_pnl_usdt": -15.8207,
+        "net_pnl_pct": -0.1582,
+        "gross_pnl_usdt": 165.3406,
+        "fees_paid_usdt": 181.1613,
+        "slippage_cost_usdt": 90.6634,
+        "win_rate_pct": 43.48,
+        "max_drawdown_pct": 9.5871,
+        "sharpe_ratio": -0.005,
+        "profit_factor": 0.9897,
+        "avg_win_usdt": 152.2909,
+        "avg_loss_usdt": -118.3638,
+        "best_trade": 162.6819,
+        "worst_trade": -135.5642
+      },
+      "champion": {
+        "label": "champion",
+        "num_trades": 3,
+        "net_pnl_usdt": 483.7805,
+        "net_pnl_pct": 4.8378,
+        "gross_pnl_usdt": 508.17,
+        "fees_paid_usdt": 24.3896,
+        "slippage_cost_usdt": 12.449,
+        "win_rate_pct": 100.0,
+        "max_drawdown_pct": 0.0,
+        "sharpe_ratio": 31.0546,
+        "profit_factor": null,
+        "avg_win_usdt": 161.2602,
+        "avg_loss_usdt": 0.0,
+        "best_trade": 165.7077,
+        "worst_trade": 155.5536
+      },
+      "candles": 259202
+    },
+    "SOL/USDT": {
+      "baseline": {
+        "label": "baseline",
+        "num_trades": 22,
+        "net_pnl_usdt": -920.0441,
+        "net_pnl_pct": -9.2004,
+        "gross_pnl_usdt": -756.5018,
+        "fees_paid_usdt": 163.5424,
+        "slippage_cost_usdt": 81.3928,
+        "win_rate_pct": 27.27,
+        "max_drawdown_pct": 13.4417,
+        "sharpe_ratio": -0.3639,
+        "profit_factor": 0.4791,
+        "avg_win_usdt": 141.0599,
+        "avg_loss_usdt": -110.4002,
+        "best_trade": 152.5533,
+        "worst_trade": -129.6501
+      },
+      "champion": {
+        "label": "champion",
+        "num_trades": 2,
+        "net_pnl_usdt": -221.3497,
+        "net_pnl_pct": -2.2135,
+        "gross_pnl_usdt": -205.4378,
+        "fees_paid_usdt": 15.9119,
+        "slippage_cost_usdt": 7.8532,
+        "win_rate_pct": 0.0,
+        "max_drawdown_pct": 2.2135,
+        "sharpe_ratio": -144.818,
+        "profit_factor": 0.0,
+        "avg_win_usdt": 0.0,
+        "avg_loss_usdt": -110.6748,
+        "best_trade": -110.1344,
+        "worst_trade": -111.2152
+      },
+      "candles": 259202
+    }
+  },
+  "combined": {
+    "baseline": {
+      "net_pnl_usdt": -246.553,
+      "num_trades": 60,
+      "wins": 25,
+      "fees_paid_usdt": 466.3081,
+      "slippage_cost_usdt": 233.26409999999998,
+      "win_rate_pct": 41.67
+    },
+    "champion": {
+      "net_pnl_usdt": 745.8425,
+      "num_trades": 10,
+      "wins": 7,
+      "fees_paid_usdt": 80.82770000000001,
+      "slippage_cost_usdt": 40.827400000000004,
+      "win_rate_pct": 70.0
+    }
+  }
+}

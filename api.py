@@ -58,7 +58,7 @@ _SESSION_COOKIE   = "trading_session"
 _SESSION_MAX_AGE  = 86_400        # 24 h
 _REMEMBER_MAX_AGE = 86_400 * 30   # 30 days
 
-_PUBLIC_PREFIXES = ("/login", "/internal", "/telegram")
+_PUBLIC_PREFIXES = ("/login", "/internal", "/telegram", "/health")
 
 # ── App ───────────────────────────────────────────────────────────────────────
 

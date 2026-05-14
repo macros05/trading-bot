@@ -1,0 +1,19 @@
+{
+  "week": 1,
+  "recorded_at": "2026-04-27T09:05:00.079698+00:00",
+  "metrics": {
+    "status": "no trades yet",
+    "days_running": 1.99,
+    "n_trades": 0,
+    "gates": {
+      "sharpe_gte_05": false,
+      "wr_ci_lower_gt_42pct": false,
+      "max_dd_lt_5pct": false,
+      "n_trades_gte_100": false
+    },
+    "gates_met": 0,
+    "gates_total": 4,
+    "ready_for_live": false,
+    "paper_test_start_ms": 1777108920000
+  }
+}

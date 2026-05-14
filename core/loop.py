@@ -105,6 +105,7 @@ class _LoopConfig:
     blocked_sessions:         tuple[str, ...]
     near_miss_rsi_band:       float
     near_miss_sma_band:       float
+    notify_per_trade:         bool
 
 
 def _parse_config(raw: dict[str, Any]) -> _LoopConfig:
@@ -153,6 +154,7 @@ def _parse_config(raw: dict[str, Any]) -> _LoopConfig:
         blocked_sessions          = tuple(raw.get('blocked_sessions', ())),
         near_miss_rsi_band        = raw.get('near_miss_rsi_band', 0.0),
         near_miss_sma_band        = raw.get('near_miss_sma_band', 0.0),
+        notify_per_trade          = raw.get('notify_per_trade', False),
     )
 
 
@@ -896,7 +898,8 @@ async def _process_tick(
                 if miss is not None:
                     logger.info('near_miss %s', miss)
                     _record_near_miss_db(miss, close, rsi_v, sma_v, cfg, now_ms)
-                    await notify_near_miss(miss, close, rsi_v, sma_v)
+                    if cfg.notify_per_trade:
+                        await notify_near_miss(miss, close, rsi_v, sma_v)
         # reset position closes when waiting
         loop_state.position_closes.clear()
         loop_state.last_pos_ts = 0
@@ -914,11 +917,12 @@ async def _process_tick(
             list(loop_state.position_closes), now_ms,
         )
 
-    if transition is not None and notification is None:
-        await notify_trailing(transition, close,
-                              state_manager.get_position() or {})
-    if notification:
-        await notify(notification)
+    if cfg.notify_per_trade:
+        if transition is not None and notification is None:
+            await notify_trailing(transition, close,
+                                  state_manager.get_position() or {})
+        if notification:
+            await notify(notification)
 
 
 # ── main loop ──────────────────────────────────────────────────────────────

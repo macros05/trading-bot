@@ -1,0 +1,44 @@
+{
+  "week": 3,
+  "recorded_at": "2026-05-11T09:05:00.014787+00:00",
+  "metrics": {
+    "status": "tracking",
+    "days_running": 15.99,
+    "n_trades": 3,
+    "win_rate": 0.3333,
+    "win_rate_ci": [
+      0.0615,
+      0.7923
+    ],
+    "win_rate_ci_lower": 0.0615,
+    "breakeven_wr": 0.415,
+    "avg_win": 42.6964,
+    "avg_loss": -144.3505,
+    "profit_factor": 0.1479,
+    "total_pnl": -246.0046,
+    "total_pnl_pct": -2.46,
+    "max_drawdown": 0.02887,
+    "max_drawdown_pct": 2.887,
+    "sharpe_per_trade": -0.7593,
+    "sharpe_annual": -6.2862,
+    "trades_per_year_est": 68.53,
+    "current_balance": 9753.9954,
+    "initial_balance": 10000.0,
+    "gates": {
+      "sharpe_gte_05": false,
+      "wr_ci_lower_gt_42pct": false,
+      "max_dd_lt_5pct": true,
+      "n_trades_gte_100": false
+    },
+    "gates_met": 1,
+    "gates_total": 4,
+    "ready_for_live": false,
+    "paper_test_start_ms": 1777108920000,
+    "equity_curve": [
+      10000.0,
+      9798.89,
+      9711.3,
+      9754.0
+    ]
+  }
+}

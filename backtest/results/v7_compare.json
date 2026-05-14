@@ -1,0 +1,131 @@
+{
+  "period": {
+    "from": "2026-04-10T18:02:00+00:00",
+    "to": "2026-05-08T18:01:00+00:00",
+    "candles": 40320
+  },
+  "baseline": {
+    "label": "v6-baseline",
+    "final_balance": 7810.8196,
+    "total_pnl": -2189.1804,
+    "total_fees": 1123.3227,
+    "period": {
+      "from": "2026-04-10T18:02:00+00:00",
+      "to": "2026-05-08T18:01:00+00:00",
+      "candles": 40320
+    },
+    "num_trades": 39,
+    "wins": 13,
+    "losses": 26,
+    "win_rate_pct": 33.33,
+    "best_trade_usdt": 247.0719,
+    "worst_trade_usdt": -292.5672,
+    "avg_trade_usdt": -56.1328,
+    "median_pnl_usdt": -64.735,
+    "avg_duration_min": 573.8,
+    "median_duration_min": 720.0,
+    "max_drawdown_pct": 26.1109,
+    "sharpe": -0.3354,
+    "by_side": {
+      "short": {
+        "trades": 37,
+        "wins": 12,
+        "win_rate_pct": 32.43,
+        "pnl": -2111.2682
+      },
+      "long": {
+        "trades": 2,
+        "wins": 1,
+        "win_rate_pct": 50.0,
+        "pnl": -77.9121
+      }
+    },
+    "by_session": {
+      "asia": {
+        "trades": 16,
+        "wins": 7,
+        "win_rate_pct": 43.75,
+        "pnl": -753.766
+      },
+      "usa": {
+        "trades": 11,
+        "wins": 1,
+        "win_rate_pct": 9.09,
+        "pnl": -1323.0672
+      },
+      "off": {
+        "trades": 4,
+        "wins": 1,
+        "win_rate_pct": 25.0,
+        "pnl": -217.2398
+      },
+      "europe": {
+        "trades": 8,
+        "wins": 4,
+        "win_rate_pct": 50.0,
+        "pnl": 104.8927
+      }
+    },
+    "by_reason": {
+      "time_exit": 23,
+      "stop_loss": 12,
+      "take_profit": 4
+    }
+  },
+  "new": {
+    "label": "v7-full",
+    "final_balance": 9707.9198,
+    "total_pnl": -292.0802,
+    "total_fees": 110.5423,
+    "period": {
+      "from": "2026-04-10T18:02:00+00:00",
+      "to": "2026-05-08T18:01:00+00:00",
+      "candles": 40320
+    },
+    "num_trades": 7,
+    "wins": 3,
+    "losses": 4,
+    "win_rate_pct": 42.86,
+    "best_trade_usdt": 110.3912,
+    "worst_trade_usdt": -236.3336,
+    "avg_trade_usdt": -41.7257,
+    "median_pnl_usdt": -65.3557,
+    "avg_duration_min": 571.4,
+    "median_duration_min": 720.0,
+    "max_drawdown_pct": 5.3226,
+    "sharpe": -0.3197,
+    "by_side": {
+      "long": {
+        "trades": 7,
+        "wins": 3,
+        "win_rate_pct": 42.86,
+        "pnl": -292.0802
+      }
+    },
+    "by_session": {
+      "europe": {
+        "trades": 4,
+        "wins": 2,
+        "win_rate_pct": 50.0,
+        "pnl": -183.8135
+      },
+      "asia": {
+        "trades": 3,
+        "wins": 1,
+        "win_rate_pct": 33.33,
+        "pnl": -108.2667
+      }
+    },
+    "by_reason": {
+      "stop_loss": 3,
+      "time_exit": 4
+    }
+  },
+  "buy_and_hold": {
+    "final_balance": 10963.5897,
+    "pnl_usdt": 963.5897,
+    "pnl_pct": 9.6359,
+    "entry_price": 72998.22,
+    "exit_price": 80178.25
+  }
+}
