@@ -176,20 +176,36 @@ def _save_trade(trade: dict) -> None:
 
 
 def _atomic_or_direct_write(path: Path, data: str) -> None:
-    """Write *data* to *path* atomically, falling back to direct write on bind mounts."""
+    """Write *data* to *path*, preserving the inode on Docker bind mounts.
+
+    Strategy 1: atomic write-tmp + os.replace. Fastest, crash-safe.
+    Strategy 2 (fallback): truncate-in-place via os.ftruncate. Used when
+    Strategy 1 fails with EBUSY/EXDEV on bind-mounted single files.
+
+    Why not Path.write_text on the fallback path: open(path, 'w') passes
+    O_TRUNC which on overlayfs can trigger a copy-up that severs the bind
+    mount link (host file inode != container file inode after that point).
+    Using os.O_WRONLY|O_CREAT (no O_TRUNC) + os.ftruncate keeps the original
+    inode intact, so the host's view of the file stays in sync."""
     tmp = path.with_suffix('.tmp')
     try:
         tmp.write_text(data, encoding='utf-8')
         os.replace(tmp, path)
+        return
     except OSError as exc:
-        if exc.errno in (16, 18):
-            try:
-                tmp.unlink(missing_ok=True)
-            except OSError:
-                pass
-            path.write_text(data, encoding='utf-8')
-        else:
+        if exc.errno not in (16, 18):
             raise
+    try:
+        tmp.unlink(missing_ok=True)
+    except OSError:
+        pass
+    payload = data.encode('utf-8')
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT, 0o644)
+    try:
+        os.ftruncate(fd, 0)
+        os.write(fd, payload)
+    finally:
+        os.close(fd)
 
 
 def _is_paused() -> bool:

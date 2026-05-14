@@ -107,19 +107,27 @@ class StateManager:
             'daily_date': self._daily_date,
         }
         data = json.dumps(payload, indent=2)
-        # Prefer atomic write; fall back to direct write on Docker bind-mounted
-        # single files where rename fails with EBUSY (errno 16) or EXDEV (18).
+        # Strategy 1: atomic write-tmp + os.replace. Crash-safe on normal FS.
+        # Strategy 2: truncate-in-place via os.ftruncate. Used when Strategy 1
+        # fails with EBUSY/EXDEV on Docker bind-mounted single files. Using
+        # os.O_WRONLY|O_CREAT (NO O_TRUNC) + os.ftruncate preserves the inode,
+        # so the host's view of the file stays in sync with the container's.
         tmp = self._path.with_suffix('.tmp')
         try:
             tmp.write_text(data, encoding='utf-8')
             os.replace(tmp, self._path)
         except OSError as exc:
-            if exc.errno in (16, 18):
-                try:
-                    tmp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                self._path.write_text(data, encoding='utf-8')
-            else:
+            if exc.errno not in (16, 18):
                 raise
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            payload_bytes = data.encode('utf-8')
+            fd = os.open(self._path, os.O_WRONLY | os.O_CREAT, 0o644)
+            try:
+                os.ftruncate(fd, 0)
+                os.write(fd, payload_bytes)
+            finally:
+                os.close(fd)
         logger.debug('state_persisted path=%s state=%s', self._path, self._state.value)

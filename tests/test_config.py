@@ -29,13 +29,16 @@ class TestAggressiveProfileConstants(unittest.TestCase):
 
     def test_circuit_breaker(self):
         from config import CIRCUIT_BREAKER_PCT
-        self.assertEqual(CIRCUIT_BREAKER_PCT, 0.05)
+        # Session 0 hard rule + spec §9.3: −3 % daily drawdown halts the bot.
+        # Was briefly 0.05 during the V7 short-side experiments — restored 2026-05-14.
+        self.assertEqual(CIRCUIT_BREAKER_PCT, 0.03)
 
     def test_rsi_thresholds(self):
         from config import RSI_LONG_THRESHOLD, RSI_SHORT_THRESHOLD
-        # Loosened thresholds (45/53) used since the May-2026 low-vol regime;
-        # the new MTF + volatility filters compensate for the wider band.
-        self.assertEqual(RSI_LONG_THRESHOLD, 45.0)
+        # 2026-05-14 sweep_v7_24mo walk-forward: RSI_LONG=45 lost −20.6 % net of
+        # fees over 24 months; RSI_LONG=40 kept +8.2 %. Reverted to 40.
+        # Short threshold 53 retained pending a short-side simulator.
+        self.assertEqual(RSI_LONG_THRESHOLD, 40.0)
         self.assertEqual(RSI_SHORT_THRESHOLD, 53.0)
 
     def test_protections_defaults_permissive(self):

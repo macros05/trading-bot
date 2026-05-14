@@ -86,10 +86,16 @@ USE_SESSION_FILTER = True
 BLOCKED_SESSIONS: tuple[str, ...] = ('off',)   # 21:00–24:00 UTC by default
 
 # ── Circuit breaker ──────────────────────────────────────────────────────────
-CIRCUIT_BREAKER_PCT = 0.05
+# Hard rule from the Session 0 prompt and the spec §9.3: −3 % daily drawdown
+# halts the bot until midnight. Do NOT loosen this. Previous value 0.05 was
+# a regression introduced during the V7 short-side asymmetry experiments.
+CIRCUIT_BREAKER_PCT = 0.03
 
 # ── Signal thresholds ────────────────────────────────────────────────────────
-RSI_LONG_THRESHOLD = 45.0
+# RSI_LONG was 45 during the May 2026 short-side experiments — 24-month
+# walk-forward (sweep_v7_24mo) showed RSI_LONG=45 lost −20.6% net of fees
+# while RSI_LONG=40 kept +8.2% with WR 62.5%. Reverted to 40.
+RSI_LONG_THRESHOLD = 40.0
 RSI_SHORT_THRESHOLD = 53.0
 
 # ── Near-miss diagnostic alerts ──────────────────────────────────────────────
