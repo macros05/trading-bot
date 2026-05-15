@@ -44,7 +44,15 @@ ATR_TP_MULTIPLIER = 3.0
 # ── Volatility window filter ─────────────────────────────────────────────────
 # Skip entries when ATR(14, 1m) sits outside the [P20, P80] band of the last
 # VOLATILITY_LOOKBACK_HOURS hours. Filters out both dead and chaotic regimes.
-USE_VOLATILITY_FILTER = True
+#
+# Disabled 2026-05-15 after sweep_v7_full_24mo on BTC+ETH+SOL: this filter was
+# the only V7 addition that hurt across symbols (sweep ran with vol_off vs all
+# other filters intact). Disabling it produced the only multi-symbol positive
+# Sharpe (avg +0.57, +5.09% summed PnL across 3 symbols, 7 trades / 24mo).
+# All other filters (MTF, ADX, session, range, short-trend) stay ON — those
+# are defensive and either neutral or critical (the short-side filters block
+# catastrophic blow-ups of −80 % to −99 % seen in v6_baseline variants).
+USE_VOLATILITY_FILTER = False
 VOLATILITY_LOOKBACK_HOURS = 48
 VOLATILITY_LOW_PERCENTILE = 20.0
 VOLATILITY_HIGH_PERCENTILE = 80.0

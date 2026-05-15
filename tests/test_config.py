@@ -51,7 +51,10 @@ class TestNewFilterConstants(unittest.TestCase):
     def test_volatility_filter_defaults(self):
         from config import (USE_VOLATILITY_FILTER, VOLATILITY_LOOKBACK_HOURS,
                             VOLATILITY_LOW_PERCENTILE, VOLATILITY_HIGH_PERCENTILE)
-        self.assertTrue(USE_VOLATILITY_FILTER)
+        # 2026-05-15 sweep_v7_full multi-symbol: this is the only filter whose
+        # disabling produced a positive cross-symbol Sharpe (+0.57). Disabled.
+        self.assertFalse(USE_VOLATILITY_FILTER)
+        # Constants kept for future re-enablement.
         self.assertEqual(VOLATILITY_LOOKBACK_HOURS, 48)
         self.assertEqual(VOLATILITY_LOW_PERCENTILE, 20.0)
         self.assertEqual(VOLATILITY_HIGH_PERCENTILE, 80.0)
