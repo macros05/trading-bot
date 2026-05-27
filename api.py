@@ -16,6 +16,7 @@ GET  /logout      → clear session
 
 import hmac
 import json
+import math
 import logging
 import os
 import time
@@ -294,13 +295,18 @@ async def health():
     try:
         data = json.loads(_HEALTH_FILE.read_text())
         age = (time.time() * 1000 - data["last_tick_ms"]) / 1000
+        # Coerce non-finite floats to None: a NaN here would make Starlette's
+        # JSONResponse (allow_nan=False) raise during encoding → 500, which the
+        # bots-watchdog reads as "unreachable" and restarts the container.
+        def _safe(value):
+            return None if isinstance(value, float) and not math.isfinite(value) else value
         return {
             "status":                "stale" if age > _STALE_SECONDS else "ok",
             "last_tick_age_seconds": round(age, 1),
-            "last_close":            data.get("last_close"),
-            "rsi":                   data.get("rsi"),
+            "last_close":            _safe(data.get("last_close")),
+            "rsi":                   _safe(data.get("rsi")),
             "state":                 data.get("state"),
-            "daily_pnl_pct":         data.get("daily_pnl_pct"),
+            "daily_pnl_pct":         _safe(data.get("daily_pnl_pct")),
         }
     except (json.JSONDecodeError, OSError, KeyError):
         return {"status": "error", "last_tick_age_seconds": None}

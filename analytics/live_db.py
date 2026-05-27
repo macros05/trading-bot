@@ -133,8 +133,24 @@ def init_db(db_path: Path | None = None) -> None:
     logger.info('live_db_initialised path=%s', db_path)
 
 
+# Timestamp sanity floor: ms since epoch for 2023-11-14T22:13:20Z.
+# Inserts with entry_ts_ms below this are rejected — guards against
+# the historical test-data bug (id 1-10 had entry_ts_ms ∈ {0, 1}).
+_MIN_VALID_TS_MS = 1_700_000_000_000
+
+
 def insert_live_trade(trade: dict, db_path: Path | None = None) -> int:
-    """Insert one closed live trade. Unknown keys flow into extra_json."""
+    """Insert one closed live trade. Unknown keys flow into extra_json.
+
+    Rejects rows with implausibly old timestamps (entry_ts_ms < 2023). Returns
+    -1 if rejected — caller may log/alert but the bot keeps running.
+    """
+    entry_ts = trade.get('entry_ts_ms')
+    if entry_ts is None or int(entry_ts) < _MIN_VALID_TS_MS:
+        logger.error(
+            'insert_live_trade.rejected_bad_timestamp entry_ts_ms=%s', entry_ts,
+        )
+        return -1
     known = {
         'entry_ts_ms', 'exit_ts_ms', 'side', 'entry_price', 'exit_price',
         'qty', 'notional_usdt', 'pnl_usdt', 'pnl_pct', 'result',

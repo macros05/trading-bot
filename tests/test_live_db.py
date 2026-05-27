@@ -78,6 +78,26 @@ class TestLiveTrades(_DBTestCase):
         self.assertEqual(rows[0]['exit_ts_ms'], 2000)
         self.assertEqual(rows[1]['exit_ts_ms'], 1000)
 
+    def test_rejects_epoch_zero_timestamp(self):
+        """Regression: ids 1-10 in production had entry_ts_ms ∈ {0,1}.
+        Guard must refuse them to keep stats clean."""
+        rc = insert_live_trade(self._trade(entry_ts_ms=0), self.db_path)
+        self.assertEqual(rc, -1)
+        self.assertEqual(count_trades(self.db_path), 0)
+
+    def test_rejects_implausibly_old_timestamp(self):
+        rc = insert_live_trade(self._trade(entry_ts_ms=1_000_000_000_000), self.db_path)
+        self.assertEqual(rc, -1)
+        self.assertEqual(count_trades(self.db_path), 0)
+
+    def test_accepts_modern_timestamp(self):
+        # Boundary: exactly the floor value is accepted.
+        rc = insert_live_trade(
+            self._trade(entry_ts_ms=1_700_000_000_000), self.db_path
+        )
+        self.assertGreater(rc, 0)
+        self.assertEqual(count_trades(self.db_path), 1)
+
 
 class TestNearMisses(_DBTestCase):
     def test_insert_and_list(self):

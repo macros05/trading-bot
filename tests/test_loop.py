@@ -656,5 +656,129 @@ class TestProtectionsIntegration(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(sm.get_position())
 
 
+# ---------------------------------------------------------------------------
+# Watchdog heartbeat — health must update even when trading is blocked
+# ---------------------------------------------------------------------------
+
+class TestHeartbeatWhenBlocked(unittest.IsolatedAsyncioTestCase):
+    """The watchdog (main.py) restarts the loop when bot_health.json's
+    last_tick_ms goes stale (>300s). A tripped circuit breaker or protection
+    must NOT starve the heartbeat — otherwise the loop is restarted forever
+    while doing no useful work (the livelock observed 2026-05-26)."""
+
+    @staticmethod
+    def _fresh(health_path) -> int:
+        import json
+        import time
+        data = json.loads(health_path.read_text())
+        return int(time.time() * 1000) - int(data['last_tick_ms'])
+
+    async def test_heartbeat_written_when_circuit_breaker_active(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            health = Path(tmp) / 'health.json'
+            with patch('core.loop._HEALTH_FILE', health):
+                await _run_one_tick(
+                    _mock_client(_candles(25)), CandleBuffer(), _mock_state(),
+                    _mock_risk(circuit_breaker=True, daily_pnl=-0.05),
+                )
+            self.assertTrue(
+                health.exists(),
+                'heartbeat must keep bot_health.json fresh even when the '
+                'circuit breaker blocks trading',
+            )
+            self.assertLess(self._fresh(health), 10_000)
+
+    async def test_heartbeat_written_when_protections_block(self):
+        import tempfile
+        from pathlib import Path
+        from core.state import StateManager
+        from risk.manager import RiskManager
+        from risk.protections import ProtectionStack
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            health = tmpdir / 'health.json'
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=1)
+            buf = CandleBuffer(maxlen=200)
+
+            class _AlwaysBlock:
+                def is_blocked(self, now_ms, trades_history):
+                    return True, 'test block'
+
+            stack = ProtectionStack([_AlwaysBlock()])
+
+            client = MagicMock()
+
+            async def _capture(symbol, timeframe, callback, **kwargs):
+                await callback(_candles(25))
+            client.watch_candles = _capture
+
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'), \
+                 patch('core.loop._HEALTH_FILE', health):
+                await trading_loop(client, buf, sm, rm, _config(), protections=stack)
+
+            self.assertTrue(
+                health.exists(),
+                'heartbeat must keep bot_health.json fresh even when a '
+                'protection blocks trading',
+            )
+            self.assertLess(self._fresh(health), 10_000)
+
+
+# ---------------------------------------------------------------------------
+# Health file must always be valid JSON (no NaN/Infinity tokens)
+# ---------------------------------------------------------------------------
+
+class TestHealthNoNaN(unittest.TestCase):
+    """bot_health.json must be strict-valid JSON. RSI is NaN during warmup; if
+    written as the literal `NaN` token the file is invalid JSON and the API
+    /health endpoint 500s (Starlette serializes with allow_nan=False). That
+    made the bots-watchdog see the bot as unreachable and restart the container
+    every 2 min (root cause #2 of the 2026-05-26 restart loop)."""
+
+    @staticmethod
+    def _assert_strict_json(path) -> None:
+        import json
+        json.loads(
+            path.read_text(),
+            parse_constant=lambda tok: (_ for _ in ()).throw(ValueError(tok)),
+        )
+
+    def test_update_health_with_nan_writes_valid_json(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from core.loop import _update_health
+        from core.state import BotState
+
+        with tempfile.TemporaryDirectory() as tmp:
+            health = Path(tmp) / 'health.json'
+            with patch('core.loop._HEALTH_FILE', health):
+                _update_health(float('nan'), float('nan'),
+                               BotState.WAITING_SIGNAL, 0.0)
+            self._assert_strict_json(health)
+            self.assertIsNone(json.loads(health.read_text())['rsi'])
+
+    def test_heartbeat_sanitizes_existing_nan(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from core.loop import _heartbeat
+
+        with tempfile.TemporaryDirectory() as tmp:
+            health = Path(tmp) / 'health.json'
+            health.write_text('{"last_tick_ms": 1, "rsi": NaN, "last_close": 100.0}')
+            with patch('core.loop._HEALTH_FILE', health):
+                _heartbeat()
+            self._assert_strict_json(health)
+            data = json.loads(health.read_text())
+            self.assertIsNone(data['rsi'])
+            self.assertGreater(data['last_tick_ms'], 1)
+
+
 if __name__ == '__main__':
     unittest.main()

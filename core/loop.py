@@ -1,5 +1,6 @@
 import logging
 import os
+import math
 import time
 import json
 from collections import deque
@@ -212,19 +213,48 @@ def _is_paused() -> bool:
     return _PAUSE_FILE.exists()
 
 
+def _finite_or_none(value: float) -> float | None:
+    """JSON has no NaN/Infinity and Starlette's JSONResponse rejects them.
+    Coerce non-finite floats (e.g. RSI during warmup) to None so
+    bot_health.json stays valid JSON and the API /health never 500s."""
+    return value if math.isfinite(value) else None
+
+
 def _update_health(close: float, rsi_val: float, state: BotState, daily_pnl: float) -> None:
     payload = {
         'last_tick_ms':  int(time.time() * 1000),
-        'last_close':    round(close, 2),
-        'rsi':           round(rsi_val, 2),
+        'last_close':    _finite_or_none(round(close, 2)),
+        'rsi':           _finite_or_none(round(rsi_val, 2)),
         'state':         state.value,
-        'daily_pnl_pct': round(daily_pnl * 100, 4),
+        'daily_pnl_pct': _finite_or_none(round(daily_pnl * 100, 4)),
         'paused':        _is_paused(),
     }
     try:
         _atomic_or_direct_write(_HEALTH_FILE, json.dumps(payload))
     except OSError as exc:
         logger.debug('health_write_failed error=%s', exc)
+
+
+def _heartbeat() -> None:
+    """Touch last_tick_ms so the watchdog sees the candle loop as alive even
+    when trading is intentionally blocked (circuit breaker, protections or
+    warmup). Without this a tripped guard starves the heartbeat and the
+    watchdog restarts the loop forever (livelock observed 2026-05-26)."""
+    try:
+        payload = json.loads(_HEALTH_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+    # Self-heal any non-finite values a previous writer left behind (NaN is an
+    # invalid JSON token that 500s the API and trips the container watchdog).
+    payload = {
+        key: (None if isinstance(val, float) and not math.isfinite(val) else val)
+        for key, val in payload.items()
+    }
+    payload['last_tick_ms'] = int(time.time() * 1000)
+    try:
+        _atomic_or_direct_write(_HEALTH_FILE, json.dumps(payload))
+    except OSError as exc:
+        logger.debug('heartbeat_write_failed error=%s', exc)
 
 
 # ── SL/TP setup ────────────────────────────────────────────────────────────
@@ -970,6 +1000,10 @@ async def trading_loop(
 
     async def _on_candles(candles: list[dict[str, Any]]) -> None:
         nonlocal _circuit_breaker_notified
+        # Prove the candle stream is alive before any guard that may return
+        # early. The full health snapshot is still written in _process_tick
+        # when trading proceeds.
+        _heartbeat()
         if risk_manager.is_circuit_breaker_active():
             daily_pnl = risk_manager.get_daily_pnl()
             logger.warning('circuit_breaker=active daily_pnl=%.4f', daily_pnl)
