@@ -892,6 +892,30 @@ async def run_safe_tick(work, loop_state, on_skip_storm, *, threshold) -> None:
     loop_state.skip_storm_alerted = False
 
 
+async def _escalate_skip_storm(count: int, exc: Exception) -> None:
+    """A sustained skip-storm means restarting won't help (the stream is alive,
+    every tick fails). Pause new entries and alert; do not silently continue."""
+    logger.error('skip_storm_escalation count=%d last_error=%s', count, exc)
+    try:
+        _PAUSE_FILE.touch()
+    except OSError as e:
+        logger.error('skip_storm_pause_write_failed error=%s', e)
+    try:
+        await notify(
+            f'⚠️ <b>SKIP-STORM</b>\n'
+            f'{count} ticks consecutivos fallaron. Entradas PAUSADAS.\n'
+            f'Último error: <code>{str(exc)[:200]}</code>'
+        )
+    except Exception:
+        pass
+
+
+def _on_skip_storm_for_test(loop_state):
+    async def _h(count, exc):
+        await _escalate_skip_storm(count, exc)
+    return _h
+
+
 async def _process_tick(
     buffer: CandleBuffer,
     state_manager: StateManager,
@@ -1037,7 +1061,7 @@ async def trading_loop(
     _circuit_breaker_notified = False
 
     async def _on_skip_storm(count: int, exc: Exception) -> None:
-        logger.error('skip_storm count=%d last_error=%s', count, exc)
+        await _escalate_skip_storm(count, exc)
 
     async def _on_candles(candles: list[dict[str, Any]]) -> None:
         nonlocal _circuit_breaker_notified

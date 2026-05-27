@@ -843,5 +843,40 @@ class TestRunSafeTick(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(st.consecutive_fail, 0)  # critical errors are not skippable
 
 
+class TestSkipStormEscalation(unittest.IsolatedAsyncioTestCase):
+    """A sustained skip-storm pauses new entries (creates the pause flag) and
+    alerts once — restarting wouldn't help when every tick fails."""
+
+    async def test_skip_storm_pauses_and_alerts(self):
+        import tempfile
+        from pathlib import Path
+        import core.loop as loop_mod
+
+        with tempfile.TemporaryDirectory() as td:
+            pause_file = Path(td) / 'pause.flag'
+            sent = []
+
+            async def fake_notify(msg):
+                sent.append(msg)
+
+            with patch.object(loop_mod, '_PAUSE_FILE', pause_file), \
+                 patch.object(loop_mod, 'notify', fake_notify):
+                st = loop_mod._LoopState()
+
+                async def work():
+                    raise ValueError('poison')
+
+                # Drive exactly threshold consecutive failures.
+                for _ in range(loop_mod._SKIP_STORM_THRESHOLD):
+                    await loop_mod.run_safe_tick(
+                        work, st, loop_mod._on_skip_storm_for_test(st),
+                        threshold=loop_mod._SKIP_STORM_THRESHOLD,
+                    )
+
+                self.assertTrue(pause_file.exists())
+                self.assertEqual(len(sent), 1)
+                self.assertIn('SKIP-STORM', sent[0])
+
+
 if __name__ == '__main__':
     unittest.main()
