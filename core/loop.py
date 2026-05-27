@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import math
@@ -52,6 +53,15 @@ _DATA_DIR       = Path('data')
 _TRADES_FILE    = _DATA_DIR / 'trades_history.json'
 _HEALTH_FILE    = _DATA_DIR / 'bot_health.json'
 _PAUSE_FILE     = _DATA_DIR / 'pause.flag'
+
+_SKIP_STORM_THRESHOLD = 5  # consecutive skipped ticks before escalation
+
+
+class CriticalTradingError(Exception):
+    """Failure that must NOT be skipped: a tripped safety invariant, state-machine
+    corruption, or (Phase 3) an unconfirmed order. Propagates to escalate
+    immediately rather than being counted as a skippable tick."""
+
 
 # Buffers for filters that need history beyond _MIN_CANDLES
 _ATR_HISTORY_MAXLEN  = 60 * 48 + 10   # ~48h of 1m bars + safety
@@ -852,6 +862,34 @@ class _LoopState:
         self.atr_history: deque[float] = deque(maxlen=_ATR_HISTORY_MAXLEN)
         self.position_closes: deque[float] = deque(maxlen=_POS_CLOSES_MAXLEN)
         self.last_pos_ts: int = 0
+        self.consecutive_fail: int = 0
+        self.skip_storm_alerted: bool = False
+
+
+async def run_safe_tick(work, loop_state, on_skip_storm, *, threshold) -> None:
+    """Run one tick's trading logic. Skippable exceptions are logged + counted so
+    the candle stream stays alive; CancelledError and CriticalTradingError
+    propagate (never swallowed). After `threshold` consecutive skips, fire
+    on_skip_storm once until a success resets the counter."""
+    try:
+        await work()
+    except asyncio.CancelledError:
+        raise
+    except CriticalTradingError:
+        raise
+    except Exception as exc:
+        loop_state.consecutive_fail += 1
+        logger.error(
+            'tick_skipped error=%s consecutive=%d',
+            exc, loop_state.consecutive_fail,
+        )
+        if (loop_state.consecutive_fail >= threshold
+                and not loop_state.skip_storm_alerted):
+            loop_state.skip_storm_alerted = True
+            await on_skip_storm(loop_state.consecutive_fail, exc)
+        return
+    loop_state.consecutive_fail = 0
+    loop_state.skip_storm_alerted = False
 
 
 async def _process_tick(
@@ -998,35 +1036,46 @@ async def trading_loop(
     loop_state = _LoopState()
     _circuit_breaker_notified = False
 
+    async def _on_skip_storm(count: int, exc: Exception) -> None:
+        logger.error('skip_storm count=%d last_error=%s', count, exc)
+
     async def _on_candles(candles: list[dict[str, Any]]) -> None:
         nonlocal _circuit_breaker_notified
         # Prove the candle stream is alive before any guard that may return
         # early. The full health snapshot is still written in _process_tick
-        # when trading proceeds.
+        # when trading proceeds. The heartbeat stays OUTSIDE the guard so a
+        # skip-storm still shows the stream as alive.
         _heartbeat()
-        if risk_manager.is_circuit_breaker_active():
-            daily_pnl = risk_manager.get_daily_pnl()
-            logger.warning('circuit_breaker=active daily_pnl=%.4f', daily_pnl)
-            if not _circuit_breaker_notified:
-                _circuit_breaker_notified = True
-                await notify(
-                    f'🛑 <b>CIRCUIT BREAKER TRIPPED</b>\n'
-                    f'Daily PnL: {daily_pnl * 100:+.2f}%\n'
-                    f'No new trades until midnight reset.'
-                )
-            return
-        _circuit_breaker_notified = False
-        macro_mode = None
-        if macro_filter is not None:
-            macro_mode = await macro_filter.get_mode()
-        if protections is not None:
-            now_ms = int(time.time() * 1000)
-            blocked, reason = protections.is_blocked(now_ms, _load_trades())
-            if blocked:
-                logger.info('protections_blocked reason=%s', reason)
+
+        async def _work() -> None:
+            nonlocal _circuit_breaker_notified
+            if risk_manager.is_circuit_breaker_active():
+                daily_pnl = risk_manager.get_daily_pnl()
+                logger.warning('circuit_breaker=active daily_pnl=%.4f', daily_pnl)
+                if not _circuit_breaker_notified:
+                    _circuit_breaker_notified = True
+                    await notify(
+                        f'🛑 <b>CIRCUIT BREAKER TRIPPED</b>\n'
+                        f'Daily PnL: {daily_pnl * 100:+.2f}%\n'
+                        f'No new trades until midnight reset.'
+                    )
                 return
-        await _process_tick(buffer, state_manager, risk_manager, cfg, candles,
-                            loop_state, macro_mode=macro_mode)
+            _circuit_breaker_notified = False
+            macro_mode = None
+            if macro_filter is not None:
+                macro_mode = await macro_filter.get_mode()
+            if protections is not None:
+                now_ms = int(time.time() * 1000)
+                blocked, reason = protections.is_blocked(now_ms, _load_trades())
+                if blocked:
+                    logger.info('protections_blocked reason=%s', reason)
+                    return
+            await _process_tick(buffer, state_manager, risk_manager, cfg, candles,
+                                loop_state, macro_mode=macro_mode)
+
+        await run_safe_tick(
+            _work, loop_state, _on_skip_storm, threshold=_SKIP_STORM_THRESHOLD,
+        )
 
     await client.watch_candles(
         cfg.symbol, cfg.timeframe, _on_candles,

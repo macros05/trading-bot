@@ -16,7 +16,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from core.loop import trading_loop
+from core.loop import (
+    trading_loop,
+    run_safe_tick,
+    CriticalTradingError,
+    _LoopState,
+)
 from core.macro_filter import AGGRESSIVE, NORMAL, NO_TRADE
 from core.state import BotState
 from data.candles import CandleBuffer
@@ -778,6 +783,64 @@ class TestHealthNoNaN(unittest.TestCase):
             data = json.loads(health.read_text())
             self.assertIsNone(data['rsi'])
             self.assertGreater(data['last_tick_ms'], 1)
+
+
+class TestRunSafeTick(unittest.IsolatedAsyncioTestCase):
+    """The per-tick guard: skippable errors are counted + skipped (loop survives);
+    CancelledError and CriticalTradingError propagate (never swallowed)."""
+
+    async def test_skippable_exception_does_not_propagate_and_counts(self):
+        st = _LoopState()
+        calls = []
+
+        async def alert(count, exc):
+            calls.append((count, exc))
+
+        async def work():
+            raise ValueError("bad candle")
+
+        # Must NOT raise — the loop survives.
+        await run_safe_tick(work, st, alert, threshold=5)
+        self.assertEqual(st.consecutive_fail, 1)
+        self.assertEqual(calls, [])  # below threshold
+
+    async def test_success_resets_counter(self):
+        st = _LoopState()
+        st.consecutive_fail = 3
+
+        async def alert(count, exc):
+            pass
+
+        async def work():
+            return None
+
+        await run_safe_tick(work, st, alert, threshold=5)
+        self.assertEqual(st.consecutive_fail, 0)
+
+    async def test_cancelled_error_propagates(self):
+        st = _LoopState()
+
+        async def alert(count, exc):
+            pass
+
+        async def work():
+            raise asyncio.CancelledError()
+
+        with self.assertRaises(asyncio.CancelledError):
+            await run_safe_tick(work, st, alert, threshold=5)
+
+    async def test_critical_error_propagates_and_is_not_counted(self):
+        st = _LoopState()
+
+        async def alert(count, exc):
+            pass
+
+        async def work():
+            raise CriticalTradingError("safety invariant violated")
+
+        with self.assertRaises(CriticalTradingError):
+            await run_safe_tick(work, st, alert, threshold=5)
+        self.assertEqual(st.consecutive_fail, 0)  # critical errors are not skippable
 
 
 if __name__ == '__main__':
