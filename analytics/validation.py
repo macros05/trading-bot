@@ -13,14 +13,43 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Backtest reference (v7 over 4 weeks, see commit de7c8ef):
-#   trades=7, win_rate=42.86 %, pnl=-292 USDT
-BACKTEST_BASELINE = {
-    'win_rate_pct':   42.86,
-    'pnl_usdt':       -292.08,
-    'avg_trade_per_week': 7 / 4,
-    'max_drawdown_pct': 5.32,
+# Neutral baseline: zero asserted edge. Used when NO champion is certified.
+# The audit (2026-05-28) removed the previous hardcoded reference (7 trades,
+# WR 42.86 %, pnl -292 USDT) because comparing live performance against a
+# LOSING backtest only raised alerts when live did worse than a money-loser —
+# an inverted validation. With a neutral baseline the expected PnL is 0, so the
+# (broken) pnl-divergence alert stays silent until a real champion is certified;
+# the win-rate and rolling-degradation alerts keep working regardless.
+NEUTRAL_BASELINE = {
+    'win_rate_pct':       0.0,
+    'pnl_usdt':           0.0,
+    'avg_trade_per_week': 0.0,
+    'max_drawdown_pct':   0.0,
 }
+
+
+def load_baseline(certificate: dict | None) -> dict:
+    """Derive the validation baseline from a champion certificate.
+
+    Returns the neutral baseline when no certificate (or no expected metrics)
+    is available — never a losing reference.
+    """
+    if not certificate:
+        return dict(NEUTRAL_BASELINE)
+    expected = certificate.get('expected_metrics') or {}
+    trades_per_year = expected.get('trades_per_year')
+    return {
+        'win_rate_pct':       expected.get('win_rate_pct') or 0.0,
+        # Expected PnL stays neutral: converting a backtest % into a 28-day USDT
+        # figure needs assumptions out of scope here. Wired in Spec 2.
+        'pnl_usdt':           0.0,
+        'avg_trade_per_week': (trades_per_year / 52.0) if trades_per_year else 0.0,
+        'max_drawdown_pct':   expected.get('max_drawdown_pct') or 0.0,
+    }
+
+
+# Default reference when no explicit baseline is passed to ``evaluate``.
+BACKTEST_BASELINE = dict(NEUTRAL_BASELINE)
 
 # Severity thresholds — all configurable so tests can stress them
 THRESH_OVERFITTING_WR     = 30.0   # below this with 20+ trades → overfitting alert
@@ -48,9 +77,15 @@ def evaluate(
     live_trades: list[dict],
     days_running: int,
     now_ms: int | None = None,
+    baseline: dict | None = None,
 ) -> dict[str, Any]:
-    """Return a structured evaluation: alerts list + computed metrics."""
+    """Return a structured evaluation: alerts list + computed metrics.
+
+    ``baseline`` defaults to the neutral baseline; pass ``load_baseline(cert)``
+    to compare against the certified champion's expected metrics.
+    """
     now_ms = now_ms or int(time.time() * 1000)
+    baseline = baseline if baseline is not None else BACKTEST_BASELINE
     sorted_t = _trades_sorted(live_trades)
     n = len(sorted_t)
     wins = sum(1 for t in sorted_t if t.get('result') == 'WIN')
@@ -61,8 +96,8 @@ def evaluate(
     last_trade_ts = int(sorted_t[-1].get('exit_ts_ms', sorted_t[-1].get('exit_ts', 0))) if n else 0
     days_since_last = (now_ms - last_trade_ts) / 86_400_000 if last_trade_ts else float('inf')
 
-    expected_trades = BACKTEST_BASELINE['avg_trade_per_week'] / 7 * max(days_running, 1)
-    expected_pnl = BACKTEST_BASELINE['pnl_usdt'] / 28 * max(days_running, 1)
+    expected_trades = baseline['avg_trade_per_week'] / 7 * max(days_running, 1)
+    expected_pnl = baseline['pnl_usdt'] / 28 * max(days_running, 1)
     pnl_divergence_pct = (
         abs(pnl - expected_pnl) / abs(expected_pnl) * 100.0
         if abs(expected_pnl) > 0.01 else 0.0
@@ -117,7 +152,7 @@ def evaluate(
         'days_since_last':    round(days_since_last, 1) if days_since_last != float('inf') else None,
         'max_drawdown_pct':   round(max_dd_pct * 100, 2),
         'alerts':             alerts,
-        'baseline':           BACKTEST_BASELINE,
+        'baseline':           baseline,
         'remaining_for_validation': max(0, MIN_TRADES_FOR_VALIDATION - n),
     }
 

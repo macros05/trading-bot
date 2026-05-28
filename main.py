@@ -136,6 +136,15 @@ async def _readiness_check_loop() -> None:
         await asyncio.sleep(6 * 3600)
 
 
+async def _notify_champion_guard(guard) -> None:
+    """Best-effort Telegram alert when the champion guard is not OK."""
+    try:
+        emoji = '🟥' if guard.level == 'CRITICAL' else '🟧'
+        await notify(f'{emoji} <b>Champion guard: {guard.level}</b>\n{guard.message}')
+    except Exception as exc:
+        logger.warning('champion_guard_notify_failed error=%s', exc)
+
+
 async def _send_startup_notification() -> None:
     """One-time confirmation that paper monitoring is armed."""
     try:
@@ -188,6 +197,21 @@ async def main() -> None:
     logger.info('protections active count=%d', 2)
 
     logger.info('bot starting config=%s', BOT_CONFIG)
+
+    # ── Champion guard: verify the live config matches a certified champion ──
+    # Tripwire only — NEVER blocks startup (Session 0 invariant). Catches a
+    # config edited into config.py without passing scripts/promote_champion.py.
+    try:
+        from core.champion_guard import load_certificate, verify_champion
+        _cert_path = str(Path(__file__).resolve().parent / 'champion_certificate.json')
+        _guard = verify_champion(BOT_CONFIG, load_certificate(_cert_path))
+        if _guard.is_ok:
+            logger.info('champion_guard ok: %s', _guard.message)
+        else:
+            logger.warning('champion_guard %s: %s', _guard.level, _guard.message)
+            asyncio.create_task(_notify_champion_guard(_guard))
+    except Exception as exc:  # guard must never block startup
+        logger.warning('champion_guard_check_skipped error=%s', exc)
 
     loop_task: asyncio.Task | None = None
     restart_requested = False
