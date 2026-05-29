@@ -60,25 +60,38 @@ def annualize(sr_trade: float, n_trades: int, period_years: float) -> float:
 
 
 def deflated_sharpe_pvalue(sr_obs: float, n_returns: int, n_trials: int,
-                           skew: float = 0.0, kurt: float = 3.0) -> float:
-    """López de Prado DSR-style p-value approximation.
+                           skew: float = 0.0, kurt: float = 3.0,
+                           sr_sample: list[float] | None = None) -> float:
+    """López de Prado Deflated-Sharpe-Ratio p-value.
 
-    Returns the probability that the *observed* per-trade Sharpe could come
-    from a true Sharpe of zero, given we tested *n_trials* configs and the
-    sample has *n_returns* observations. Numbers above 0.95 indicate we can
-    reject the null with 95% confidence after the multiple-comparison
-    correction.
+    Returns the probability that the *observed* per-trade Sharpe ``sr_obs``
+    beats the expected maximum Sharpe a null strategy would reach after we
+    tried ``n_trials`` configs, given the sample has ``n_returns`` trades.
+    Above 0.95 we reject the null with 95% confidence after the
+    multiple-comparison correction.
+
+    ``sr_sample`` is the set of per-trial Sharpes actually observed across the
+    sweep. Its dispersion is the cross-trial ``σ_SR`` that scales the
+    expected-maximum bar (LdP 2018, eq. 8.1). WITHOUT it the bar is computed as
+    if σ_SR were 1.0 — roughly a 4× inflation for a typical sweep, which makes
+    DSR ≥ 0.95 unreachable for any real strategy and turns the gate degenerate.
+    When fewer than two trial Sharpes are supplied we fall back to σ_SR = 1.0,
+    which is *conservative* (over-strict), never fail-open.
     """
     if n_returns < 4 or n_trials < 1:
         return 0.0
-    # SR_0: expected maximum of n_trials independent SRs under the null
-    # (López de Prado 2018 eq. 6.10 approximation)
     import statistics
+    # E[max SR] under the null over n_trials (LdP 2018, eq. 8.1): a LINEAR
+    # combination of the two extreme-value quantiles, scaled by the cross-trial
+    # σ_SR. Using sqrt-of-squares here would be wrong but is <1% at these N; the
+    # σ_SR scaling is the term that actually matters.
     z_e = statistics.NormalDist().inv_cdf(1 - 1.0 / n_trials)
     z_n = statistics.NormalDist().inv_cdf(1 - 1.0 / (n_trials * math.e))
     EULER = 0.5772156649
-    sr0 = math.sqrt(max(1e-9, (1 - EULER) * z_e * z_e + EULER * z_n * z_n))
-    # Normalised variance of SR estimator
+    sigma_sr = (statistics.pstdev(sr_sample)
+                if sr_sample and len(sr_sample) > 1 else 1.0)
+    sr0 = sigma_sr * ((1 - EULER) * z_e + EULER * z_n)
+    # Normalised variance of the SR estimator (non-normality correction).
     denom_var = max(1e-9,
                     1 - skew * sr_obs + (kurt - 1) / 4 * sr_obs * sr_obs)
     z = (sr_obs - sr0) * math.sqrt(max(1, n_returns - 1)) / math.sqrt(denom_var)
@@ -127,7 +140,8 @@ def walk_forward_v7(df: pd.DataFrame, p: V7Params,
 
 
 def aggregate(wf: dict, params: V7Params, period_years: float,
-              n_trials_for_dsr: int) -> dict:
+              n_trials_for_dsr: int,
+              sr_sample: list[float] | None = None) -> dict:
     trades = wf['trades']
     n = len(trades)
     initial = wf['initial_balance']
@@ -170,7 +184,8 @@ def aggregate(wf: dict, params: V7Params, period_years: float,
     else:
         skew, kurt = 0.0, 3.0
     sr_ann = annualize(sr, n, period_years)
-    dsr_p = deflated_sharpe_pvalue(sr, n, n_trials_for_dsr, skew=skew, kurt=kurt)
+    dsr_p = deflated_sharpe_pvalue(sr, n, n_trials_for_dsr, skew=skew,
+                                   kurt=kurt, sr_sample=sr_sample)
     # Drawdown over the compounding equity curve
     peak = wf['equity'][0]
     max_dd = 0.0
@@ -205,6 +220,8 @@ def aggregate(wf: dict, params: V7Params, period_years: float,
         'by_side': {
             s: {'trades': v['n'], 'wins': v['w'],
                 'win_rate_pct': round(v['w'] / v['n'] * 100, 2) if v['n'] else 0.0,
+                'wr_lower_95': round(wilson_lower(v['w'] / v['n'], v['n']) * 100, 2)
+                               if v['n'] else 0.0,
                 'pnl_usdt': round(v['pnl'], 4)}
             for s, v in by_side.items()
         },
@@ -260,25 +277,47 @@ def main() -> None:
         replace(base, label='mtf_off+trailing_off',   use_mtf_filter=False, use_trailing_stop=False),
     ]
 
-    results = []
     print(f'\nrunning {len(variants)} V7-full variants × walk-forward (24mo, 3/1/1)…\n')
+    # Pass 1: walk-forward + aggregate every variant. DSR is provisional here
+    # (σ_SR=1.0 fallback) because the cross-trial σ_SR needs every variant's
+    # per-trade Sharpe first.
+    prelim = []
+    for v in variants:
+        t0 = time.time()
+        wf = walk_forward_v7(df, v)
+        agg = aggregate(wf, v, period_years, n_trials_for_dsr=len(variants))
+        prelim.append((v, agg, round(time.time() - t0, 2)))
+
+    # Cross-trial σ_SR: the dispersion of the per-trade Sharpes actually tried.
+    # Variants that never traded produced no Sharpe estimate, so exclude their
+    # structural zeros from the sample (they would deflate σ_SR artificially).
+    sr_sample = [agg['sharpe_trade'] for (_, agg, _) in prelim
+                 if agg['num_trades'] > 0]
+
+    # Pass 2: recompute DSR for each variant against the real σ_SR.
+    for (_, agg, _) in prelim:
+        if agg['num_trades'] > 0:
+            agg['dsr_pvalue'] = round(deflated_sharpe_pvalue(
+                agg['sharpe_trade'], agg['num_trades'], len(variants),
+                skew=agg.get('returns_skew', 0.0),
+                kurt=agg.get('returns_kurt', 3.0),
+                sr_sample=sr_sample), 4)
+
+    results = []
     hdr = (f"{'label':<32}  {'#':>4}  {'WR%':>5}  {'WR_lo%':>6}  "
            f"{'Long':>9}  {'Short':>9}  "
            f"{'SR_tr':>7}  {'SR_ann':>7}  {'DSR_p':>5}  "
            f"{'DD%':>6}  {'PnL%':>7}  {'PF':>5}  {'t_s':>5}")
     print(hdr)
     print('-' * len(hdr))
-    for v in variants:
-        t0 = time.time()
-        wf = walk_forward_v7(df, v)
-        agg = aggregate(wf, v, period_years, n_trials_for_dsr=len(variants))
+    for v, agg, duration in prelim:
         long_view  = agg['by_side']['long']
         short_view = agg['by_side']['short']
         long_summary = f"{long_view['trades']}/{long_view['win_rate_pct']:.0f}%"
         short_summary = f"{short_view['trades']}/{short_view['win_rate_pct']:.0f}%"
         pf_s = f"{agg['profit_factor']:.2f}" if agg.get('profit_factor') is not None else '∞'
         rec = {'label': v.label, 'params': asdict(v), **agg,
-               'duration_sec': round(time.time() - t0, 2)}
+               'duration_sec': duration}
         results.append(rec)
         print(
             f"{v.label:<32}  {agg['num_trades']:>4}  {agg['win_rate_pct']:>5.1f}  {agg['wr_lower_95']:>6.1f}  "

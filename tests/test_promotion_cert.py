@@ -3,14 +3,19 @@ decision. Pure logic; the CLI (scripts/promote_champion.py) is a thin wrapper.
 """
 import unittest
 
+from dataclasses import fields
+
 from backtest.promotion_gate import GateThresholds, evaluate_config
 from backtest.promotion_cert import (
     build_certificate,
     decide,
     find_result,
     translate_params,
+    EXCLUDED_SWEEP_KEYS,
+    SWEEP_TO_CONFIG_KEYS,
     SCHEMA_VERSION,
 )
+from backtest.v7_full import V7Params
 
 THR = GateThresholds(min_dsr=0.95, min_trades=100)
 
@@ -24,9 +29,13 @@ def _sweep(label='cand', **overrides):
         'breakeven_wr_long': 43.08,
         'breakeven_wr_short': 40.0,
         'sharpe_annual': 1.4,
+        'sharpe_trade': 0.3,
         'net_pnl_pct': 22.0,
         'win_rate_pct': 60.0,
         'max_drawdown_pct': 8.0,
+        'profit_factor': 1.6,
+        'num_folds': 21,
+        'folds_with_trades': 18,
         'params': {'rsi_threshold': 40.0, 'adx_threshold': 45.0},
     }
     result.update(overrides)
@@ -81,6 +90,26 @@ class TestTranslateParams(unittest.TestCase):
         self.assertEqual(cfg['use_adx_filter'], True)
         # unmapped keys are dropped (not part of the material comparison)
         self.assertNotIn('unmapped_internal_key', cfg)
+
+    def test_every_v7param_is_mapped_or_explicitly_excluded(self):
+        # The guard only detects drift on mapped params. Force any NEW V7Params
+        # field to be a conscious map/exclude decision rather than a silent gap.
+        v7_fields = {f.name for f in fields(V7Params)}
+        accounted = set(SWEEP_TO_CONFIG_KEYS) | set(EXCLUDED_SWEEP_KEYS)
+        self.assertEqual(
+            v7_fields - accounted, set(),
+            'unmapped V7Params field(s) — add to SWEEP_TO_CONFIG_KEYS or '
+            'EXCLUDED_SWEEP_KEYS',
+        )
+        # and nothing is in both / stale
+        self.assertEqual(set(SWEEP_TO_CONFIG_KEYS) & set(EXCLUDED_SWEEP_KEYS),
+                         set())
+
+    def test_blocked_sessions_tuple_normalised_to_list(self):
+        # blocked_sessions is a tuple live but a list after JSON round-trip;
+        # normalise so the guard does not flag tuple-vs-list as drift.
+        cfg = translate_params({'blocked_sessions': ('asia', 'us')})
+        self.assertEqual(cfg['blocked_sessions'], ['asia', 'us'])
 
     def test_certificate_includes_config_params(self):
         sweep = _sweep()

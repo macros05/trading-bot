@@ -21,36 +21,72 @@ VALIDATION_CAVEATS = [
     'backtest does not model MacroFilter (live-only; currently dormant in main.py)',
 ]
 
-# Sweep ``params`` use different key names than the live BOT_CONFIG for several
-# strategy-deciding params. This bridge maps the *material* sweep keys to their
-# BOT_CONFIG equivalents so the runtime guard can compare like-for-like. Keys
-# not listed here are internal to the backtest and not part of the comparison.
+# Sweep ``params`` use different key names than the live BOT_CONFIG for a few
+# strategy-deciding params. This bridge maps EVERY material sweep key to its
+# BOT_CONFIG equivalent so the runtime guard can compare like-for-like. The
+# guard's drift detection is only as complete as this map: any material param
+# left out is a blind spot through which a hand-edit to config.py could pass
+# unnoticed. The companion EXCLUDED_SWEEP_KEYS set lists the params we
+# deliberately do NOT track (pure backtest internals); a unit test asserts that
+# every V7Params field is either mapped here or explicitly excluded, so adding a
+# new strategy param forces a conscious map/exclude decision.
 SWEEP_TO_CONFIG_KEYS = {
     'rsi_long_threshold':     'rsi_threshold',
     'rsi_short_threshold':    'rsi_short_threshold',
     'adx_threshold':          'adx_threshold',
+    'adx_flat_threshold':     'adx_flat_threshold',
     'use_adx_filter':         'use_adx_filter',
     'use_mtf_filter':         'use_mtf_filter',
+    'mtf_15m_period':         'mtf_15m_period',
     'use_session_filter':     'use_session_filter',
+    'blocked_sessions':       'blocked_sessions',
     'use_short_trend_filter': 'use_short_trend_filter',
+    'short_adx_min':          'short_adx_min',
+    'short_sma_period':       'short_sma_period',
     'use_volatility_filter':  'use_volatility_filter',
+    'volatility_lookback_hours': 'volatility_lookback_hours',
+    'volatility_low_pct':     'volatility_low_pct',
+    'volatility_high_pct':    'volatility_high_pct',
     'use_trailing_stop':      'use_trailing_stop',
+    'trailing_breakeven_pct': 'trailing_breakeven_pct',
+    'trailing_trail_pct':     'trailing_trail_pct',
+    'trailing_distance_pct':  'trailing_distance_pct',
     'sl_pct_long':            'stop_loss_pct_long',
     'sl_pct_short':           'stop_loss_pct_short',
     'tp_pct_long':            'take_profit_pct_long',
     'tp_pct_short':           'take_profit_pct_short',
     'max_hold_hours':         'max_hold_hours',
+    'stalled_hours':          'stalled_hours',
+    'stalled_move_threshold': 'stalled_move_threshold',
+    'range_lookback_min':     'range_lookback_min',
     'range_pct_threshold':    'range_pct_threshold',
+    'risk_pct':               'risk_pct',
 }
+
+# V7Params fields intentionally NOT tracked by the guard: identity + backtest
+# accounting/cost knobs that do not shape the live strategy decision.
+EXCLUDED_SWEEP_KEYS = frozenset({
+    'label', 'balance', 'apply_costs', 'taker_fee', 'slippage',
+})
+
+
+def _normalize(value):
+    """Coerce sequences to lists so tuple-vs-list (JSON round-trip) does not
+    register as drift. ``blocked_sessions`` is a tuple live but a list in the
+    certificate after JSON load."""
+    if isinstance(value, (list, tuple)):
+        return [_normalize(v) for v in value]
+    return value
 
 
 def translate_params(sweep_params: dict) -> dict:
     """Translate sweep-named material params into BOT_CONFIG key names.
 
     Unmapped keys are dropped — they are backtest internals, not live config.
+    Sequence values are normalised to lists so the guard compares like-for-like.
     """
     return {
-        config_key: sweep_params[sweep_key]
+        config_key: _normalize(sweep_params[sweep_key])
         for sweep_key, config_key in SWEEP_TO_CONFIG_KEYS.items()
         if sweep_key in sweep_params
     }
@@ -82,12 +118,19 @@ def _expected_metrics(result: dict, period_years: float | None) -> dict:
     trades_per_year = None
     if n_trades is not None and period_years:
         trades_per_year = n_trades / period_years
+    num_folds = result.get('num_folds')
+    folds_with_trades = result.get('folds_with_trades')
+    fold_coverage = None
+    if num_folds:
+        fold_coverage = folds_with_trades / num_folds
     return {
         'win_rate_pct': result.get('win_rate_pct'),
         'net_pnl_pct': result.get('net_pnl_pct'),
         'num_trades': n_trades,
         'max_drawdown_pct': result.get('max_drawdown_pct'),
+        'profit_factor': result.get('profit_factor'),
         'trades_per_year': trades_per_year,
+        'fold_coverage': fold_coverage,
     }
 
 
@@ -124,6 +167,12 @@ def build_certificate(*, sweep_path: str, sweep_data: dict, sweep_sha256: str,
             'thresholds': {
                 'min_dsr': thresholds.min_dsr,
                 'min_trades': thresholds.min_trades,
+                'min_side_trades': thresholds.min_side_trades,
+                'require_positive_pnl': thresholds.require_positive_pnl,
+                'require_positive_sharpe': thresholds.require_positive_sharpe,
+                'min_profit_factor': thresholds.min_profit_factor,
+                'max_drawdown_pct': thresholds.max_drawdown_pct,
+                'min_fold_coverage': thresholds.min_fold_coverage,
             },
             'passed': verdict.passed,
             'metrics': verdict.metrics,

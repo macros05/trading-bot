@@ -71,8 +71,12 @@ def main(argv: list[str] | None = None) -> int:
 
     thresholds = GateThresholds(min_dsr=args.min_dsr, min_trades=args.min_trades)
 
+    def _reject_non_finite(token: str):
+        raise ValueError(f'non-finite literal {token!r} in sweep JSON — '
+                         'refusing to evaluate a malformed result')
+
     with open(args.sweep, encoding='utf-8') as handle:
-        sweep_data = json.load(handle)
+        sweep_data = json.load(handle, parse_constant=_reject_non_finite)
 
     result = find_result(sweep_data, args.label)
     if result is None:

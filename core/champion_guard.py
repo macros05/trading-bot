@@ -18,18 +18,34 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+def _reject_non_finite(token: str):
+    """``parse_constant`` hook: a NaN/Infinity literal in the certificate is
+    corruption, not data — reject it so the guard treats the cert as invalid."""
+    raise ValueError(f'non-finite literal {token!r} in certificate JSON')
+
+
 def load_certificate(path: str) -> dict | None:
     """Load the champion certificate JSON; return ``None`` on any problem.
 
     Never raises — a missing or corrupt certificate is itself a signal the
-    guard reports as CRITICAL, not a reason to crash the bot.
+    guard reports as CRITICAL, not a reason to crash the bot. NaN/Infinity
+    literals are rejected rather than parsed into floats.
     """
     try:
         with open(path, encoding='utf-8') as handle:
-            return json.load(handle)
+            return json.load(handle, parse_constant=_reject_non_finite)
     except (OSError, ValueError) as exc:
         logger.warning('Could not load champion certificate %s: %s', path, exc)
         return None
+
+
+def _norm(value):
+    """Normalise sequences to lists so a tuple-valued live param (e.g.
+    ``blocked_sessions``) does not register as drift against its JSON-loaded
+    (list) certificate counterpart."""
+    if isinstance(value, (list, tuple)):
+        return [_norm(v) for v in value]
+    return value
 
 
 @dataclass
@@ -79,7 +95,7 @@ def verify_champion(bot_config: dict, certificate: dict | None,
 
         mismatches = [
             f'{k}: live={bot_config[k]!r} cert={params[k]!r}'
-            for k in shared if bot_config[k] != params[k]
+            for k in shared if _norm(bot_config[k]) != _norm(params[k])
         ]
         if mismatches:
             return GuardResult(

@@ -83,6 +83,25 @@ class TestVerifyChampion(unittest.TestCase):
         self.assertEqual(res.level, 'CRITICAL')
         self.assertIn('use_volatility_filter', res.message)
 
+    def test_blocked_sessions_tuple_vs_list_is_not_drift(self):
+        # Live config holds a tuple; the JSON cert holds a list. Same value must
+        # NOT register as drift.
+        bot = {'rsi_threshold': 40.0, 'blocked_sessions': ('off',)}
+        cert = _cert(passed=True, config_params={
+            'rsi_threshold': 40.0, 'blocked_sessions': ['off'],
+        })
+        res = verify_champion(bot, cert)
+        self.assertEqual(res.level, 'OK', res.message)
+
+    def test_blocked_sessions_real_drift_is_critical(self):
+        bot = {'rsi_threshold': 40.0, 'blocked_sessions': ()}  # hand-edited off
+        cert = _cert(passed=True, config_params={
+            'rsi_threshold': 40.0, 'blocked_sessions': ['asia'],
+        })
+        res = verify_champion(bot, cert)
+        self.assertEqual(res.level, 'CRITICAL')
+        self.assertIn('blocked_sessions', res.message)
+
     def test_falls_back_to_raw_params_when_no_config_params(self):
         # Legacy/edge cert with only 'params' (sweep-named) still verifies
         bot = {'rsi_threshold': 40.0, 'use_adx_filter': True}
@@ -111,6 +130,18 @@ class TestLoadCertificate(unittest.TestCase):
     def test_malformed_json_returns_none_not_crash(self):
         with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
             f.write('{not valid json')
+            path = f.name
+        try:
+            self.assertIsNone(load_certificate(path))
+        finally:
+            os.unlink(path)
+
+    def test_non_finite_literal_rejected_as_corrupt(self):
+        # A NaN literal in a metric is corruption; the loader must reject the
+        # whole certificate (-> None -> guard reports CRITICAL) rather than
+        # parse it into a float that could pass a numeric check.
+        with tempfile.NamedTemporaryFile('w', suffix='.json', delete=False) as f:
+            f.write('{"label": "x", "gate": {"metrics": {"dsr_pvalue": NaN}}}')
             path = f.name
         try:
             self.assertIsNone(load_certificate(path))
