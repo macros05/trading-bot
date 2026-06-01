@@ -176,6 +176,20 @@ class TestBufferNotReady(unittest.IsolatedAsyncioTestCase):
 
 class TestEntrySignal(unittest.IsolatedAsyncioTestCase):
 
+    def setUp(self):
+        # Isolate from any real data/pause.flag in the working directory —
+        # these tests assume trading is not paused. Without this they break
+        # when the live bot has been paused via the flag file.
+        import tempfile
+        from pathlib import Path
+        self._pause_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._pause_dir.cleanup)
+        pause_patch = patch(
+            'core.loop._PAUSE_FILE', Path(self._pause_dir.name) / 'pause.flag'
+        )
+        pause_patch.start()
+        self.addCleanup(pause_patch.stop)
+
     async def test_opens_position_when_signal_fires(self):
         state_manager = _mock_state(BotState.WAITING_SIGNAL)
         risk = _mock_risk(position_size=100.0)
@@ -731,6 +745,44 @@ class TestHeartbeatWhenBlocked(unittest.IsolatedAsyncioTestCase):
                 'heartbeat must keep bot_health.json fresh even when a '
                 'protection blocks trading',
             )
+            self.assertLess(self._fresh(health), 10_000)
+
+    async def test_heartbeat_syncs_authoritative_state_when_blocked(self):
+        """A guard early-return (e.g. circuit breaker) skips _process_tick and
+        therefore _update_health. The heartbeat must still sync the
+        authoritative state from bot_state.json so the snapshot does not get
+        stuck on a stale value (observed: health stuck IN_POSITION after the
+        position had already closed and the machine reset to WAITING_SIGNAL)."""
+        import json
+        import tempfile
+        import time
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            health = tmpdir / 'health.json'
+            state = tmpdir / 'state.json'
+            health.write_text(json.dumps({
+                'last_tick_ms': int(time.time() * 1000) - 120_000,
+                'state': 'IN_POSITION',
+            }))
+            state.write_text(json.dumps(
+                {'state': 'WAITING_SIGNAL', 'position': None}
+            ))
+            with patch('core.loop._HEALTH_FILE', health), \
+                 patch('core.loop._STATE_FILE', state), \
+                 patch('core.loop._PAUSE_FILE', tmpdir / 'pause.flag'):
+                await _run_one_tick(
+                    _mock_client(_candles(25)), CandleBuffer(), _mock_state(),
+                    _mock_risk(circuit_breaker=True, daily_pnl=-0.05),
+                )
+            snapshot = json.loads(health.read_text())
+            self.assertEqual(
+                snapshot['state'], 'WAITING_SIGNAL',
+                'heartbeat must sync state from bot_state.json on a guard '
+                'early-return, not leave a stale IN_POSITION',
+            )
+            self.assertFalse(snapshot['paused'])
             self.assertLess(self._fresh(health), 10_000)
 
 

@@ -52,6 +52,7 @@ _MIN_CANDLES    = max(_SMA_PERIOD, _RSI_PERIOD, _VOL_SMA_PERIOD, _ATR_PERIOD)
 _DATA_DIR       = Path('data')
 _TRADES_FILE    = _DATA_DIR / 'trades_history.json'
 _HEALTH_FILE    = _DATA_DIR / 'bot_health.json'
+_STATE_FILE     = _DATA_DIR / 'bot_state.json'
 _PAUSE_FILE     = _DATA_DIR / 'pause.flag'
 
 _SKIP_STORM_THRESHOLD = 5  # consecutive skipped ticks before escalation
@@ -261,6 +262,17 @@ def _heartbeat() -> None:
         for key, val in payload.items()
     }
     payload['last_tick_ms'] = int(time.time() * 1000)
+    # Sync the authoritative state so guard early-returns (circuit breaker,
+    # protections, warmup) that skip _process_tick — and thus _update_health —
+    # do not leave a stale state in the snapshot (observed: health stuck at
+    # IN_POSITION while the state machine had already reset to WAITING_SIGNAL).
+    try:
+        state_payload = json.loads(_STATE_FILE.read_text())
+        if 'state' in state_payload:
+            payload['state'] = state_payload['state']
+    except (OSError, json.JSONDecodeError):
+        pass
+    payload['paused'] = _is_paused()
     try:
         _atomic_or_direct_write(_HEALTH_FILE, json.dumps(payload))
     except OSError as exc:
@@ -1059,6 +1071,7 @@ async def trading_loop(
 
     loop_state = _LoopState()
     _circuit_breaker_notified = False
+    _circuit_breaker_last_log_ms = 0
 
     async def _on_skip_storm(count: int, exc: Exception) -> None:
         await _escalate_skip_storm(count, exc)
@@ -1072,10 +1085,17 @@ async def trading_loop(
         _heartbeat()
 
         async def _work() -> None:
-            nonlocal _circuit_breaker_notified
+            nonlocal _circuit_breaker_notified, _circuit_breaker_last_log_ms
             if risk_manager.is_circuit_breaker_active():
                 daily_pnl = risk_manager.get_daily_pnl()
-                logger.warning('circuit_breaker=active daily_pnl=%.4f', daily_pnl)
+                # The candle stream pushes several times per second, so logging
+                # the breaker on every tick floods the log (observed ~5 lines/s
+                # for a full day). Emit at most once per minute while halted;
+                # the one-shot Telegram alert below still fires on the edge.
+                now_ms = int(time.time() * 1000)
+                if now_ms - _circuit_breaker_last_log_ms >= 60_000:
+                    logger.warning('circuit_breaker=active daily_pnl=%.4f', daily_pnl)
+                    _circuit_breaker_last_log_ms = now_ms
                 if not _circuit_breaker_notified:
                     _circuit_breaker_notified = True
                     await notify(
