@@ -205,6 +205,29 @@ class TestGateCompatibleAggregate(unittest.TestCase):
         self.assertGreater(out['final_balance'], out['initial_balance'])
         self.assertEqual(len(out['equity']), len(out['trades']) + 1)
 
+    def test_default_annualization_uses_oos_span_not_df_span(self):
+        # 6 months of data, train 3 / test 1 / step 1 -> 3 test windows
+        # spanning exactly 3 months. Annualizing over the 6-month df span
+        # would understate trades/year by 2x (sharpe_annual by sqrt(2)).
+        df = _make_df(6, regime_flip_month=None)
+        out = run_wfa(df, [_FakeParams('solo', prefers_regime=0)],
+                      _fake_simulate, WfaConfig(min_test_candles=10))
+        aggregate = out['aggregate']
+        folds = out['folds']
+        oos_ms = (max(f['test_to_ms'] for f in folds)
+                  - min(f['test_from_ms'] for f in folds))
+        oos_years = oos_ms / (365.25 * 86_400 * 1_000)
+        n = aggregate['num_trades']
+        expected = aggregate['sharpe_trade'] * math.sqrt(n / oos_years)
+        # sharpe_trade is rounded to 4dp in the aggregate -> compare relatively
+        self.assertAlmostEqual(aggregate['sharpe_annual'], expected,
+                               delta=abs(expected) * 1e-3)
+        df_span_years = (int(df['ts'].iloc[-1]) - int(df['ts'].iloc[0])) / (
+            365.25 * 86_400 * 1_000)
+        wrong = aggregate['sharpe_trade'] * math.sqrt(n / df_span_years)
+        self.assertGreater(abs(aggregate['sharpe_annual'] - wrong),
+                           abs(expected) * 0.05)
+
 
 class TestWarmupNoLeak(unittest.TestCase):
     """(e) warmup_bars extends slices backward only; warmup trades dropped."""

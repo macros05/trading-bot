@@ -271,6 +271,23 @@ def aggregate_oos(wf: dict, period_years: float, n_trials_for_dsr: int,
     }
 
 
+def _oos_period_years(folds: list[dict], df: pd.DataFrame) -> float:
+    """Calendar span of the chained OOS series, in years.
+
+    The aggregate annualizes per-trade Sharpe via trades-per-year, so the
+    denominator must be the span of the TEST windows only. Using the full
+    dataframe span would silently include the initial train months (and any
+    warmup), understating trade frequency and shrinking ``sharpe_annual``
+    by ~sqrt(train/(train+oos)). Falls back to the df span when no fold ran.
+    """
+    if folds:
+        start = min(f['test_from_ms'] for f in folds)
+        end = max(f['test_to_ms'] for f in folds)
+        return (end - start) / _MS_PER_YEAR
+    span_ms = (int(df['ts'].iloc[-1]) - int(df['ts'].iloc[0])) if len(df) else 0
+    return span_ms / _MS_PER_YEAR
+
+
 def _build_fold_record(fold_index: int, train_window: _Window,
                        test_window: _Window, test_candles: int,
                        winner_label: str, selection_applied: bool,
@@ -324,8 +341,7 @@ def run_wfa(df: pd.DataFrame, candidates: Sequence[Any],
                        initial_balance, fold_summary_fn)
     result_label = label or _candidate_label(candidates[0], 0)
     if period_years is None:
-        span_ms = (int(df['ts'].iloc[-1]) - int(df['ts'].iloc[0])) if len(df) else 0
-        period_years = span_ms / _MS_PER_YEAR
+        period_years = _oos_period_years(state['folds'], df)
     if n_trials_for_dsr is None:
         n_trials_for_dsr = max(2, state['n_evaluations'] + 1)
     if breakeven_long_pct is None or breakeven_short_pct is None:
