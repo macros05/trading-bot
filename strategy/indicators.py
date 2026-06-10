@@ -64,6 +64,45 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
 
 
+def donchian_high(df: pd.DataFrame, period: int) -> pd.Series:
+    """Highest 'high' over the last *period* bars (current bar included).
+
+    Callers that need a breakout level must shift(1) so a bar cannot
+    break its own high. NaN until *period* bars are available.
+    """
+    return df['high'].rolling(window=period, min_periods=period).max()
+
+
+def donchian_low(df: pd.DataFrame, period: int) -> pd.Series:
+    """Lowest 'low' over the last *period* bars (current bar included).
+
+    NaN until *period* bars are available.
+    """
+    return df['low'].rolling(window=period, min_periods=period).min()
+
+
+def bollinger_lower(df: pd.DataFrame, period: int = 20, num_std: float = 2.0) -> pd.Series:
+    """Lower Bollinger band: SMA(period) − num_std · population std of close.
+
+    ddof=0 matches the classic TA definition (population, not sample, std).
+    NaN until *period* bars are available.
+    """
+    middle = df['close'].rolling(window=period, min_periods=period).mean()
+    deviation = df['close'].rolling(window=period, min_periods=period).std(ddof=0)
+    return middle - num_std * deviation
+
+
+def atr_percentile(df: pd.DataFrame, period: int = 14, window: int = 2160) -> pd.Series:
+    """Percentile rank (0, 1] of the current ATR within the trailing *window* bars.
+
+    Used as a volatility-regime filter: values > 0.5 mean the market is in the
+    upper half of its recent volatility range. NaN until the window is full,
+    so the filter fails closed (no trades) during warmup.
+    """
+    atr_series = atr(df, period)
+    return atr_series.rolling(window=window, min_periods=window).rank(pct=True)
+
+
 def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """Average Directional Index, Wilder smoothing.
 
