@@ -1,18 +1,25 @@
-"""Walk-forward out-of-sample validation harness.
+"""Walk-forward out-of-sample validation harness (advanced simulator).
 
-Splits a single large dataframe into rolling (train, test) windows and runs
-the advanced simulator against the test slice of each fold. Training is
-currently fixed-parameter (no hyperparameter search inside the fold); the
-harness is shaped so a sweep can be dropped in later.
+Thin wrapper around the generic ``backtest.wfa`` engine. The historical
+implementation iterated ``(train, test)`` folds but discarded the train slice
+(``for _train, test in ...``), so it never optimized anything; the engine now
+owns the fold loop and the train slice drives in-fold candidate selection when
+more than one candidate is supplied. The default single-params call keeps the
+fixed-params behavior the CLI exposes.
+
+The aggregate is the shared promotion-gate-compatible dict from
+``backtest.wfa.aggregate_oos`` plus the legacy CLI keys (``sharpe_ratio``,
+balances, fees/slippage totals) so ``backtest/cli.py`` output stays stable.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import pandas as pd
 
 from backtest.advanced import AdvancedParams, compute_summary, simulate
+from backtest.wfa import WfaConfig, run_wfa
 
 
 _APPROX_MS_PER_MONTH = 30 * 24 * 60 * 60 * 1000
@@ -55,89 +62,52 @@ def iter_folds(
         cursor += step_ms
 
 
+def _summarize_fold(result: dict, _initial_balance: float) -> dict:
+    return compute_summary(result)
+
+
+def _legacy_aggregate_view(outcome: dict) -> dict:
+    """Shared gate-compatible aggregate + the keys the CLI always printed."""
+    aggregate = dict(outcome['aggregate'])
+    trades = outcome['trades']
+    aggregate['sharpe_ratio'] = aggregate.get('sharpe_trade', 0.0)
+    aggregate['initial_balance'] = outcome['initial_balance']
+    aggregate['final_balance'] = outcome['final_balance']
+    aggregate['fees_paid_usdt'] = round(
+        sum(t.get('fees', 0.0) for t in trades), 4)
+    aggregate['slippage_cost_usdt'] = round(
+        sum(t.get('slippage', 0.0) for t in trades), 4)
+    return aggregate
+
+
 def run(
     df: pd.DataFrame,
     params: AdvancedParams,
     cfg: WalkForwardConfig = WalkForwardConfig(),
+    candidates: Sequence[AdvancedParams] | None = None,
 ) -> dict:
-    """Execute walk-forward over *df* using fixed *params*.
+    """Execute walk-forward over *df*.
 
-    Returns a dict with per-fold summaries and an aggregate summary over all
-    test trades (as if they were a single strategy run).
+    With the default ``candidates=None`` this is the fixed-params mode (only
+    *params* runs, zero train evaluations). Passing ``candidates`` enables
+    real in-fold optimization: every candidate is simulated on each train
+    slice and only the winner runs the test slice (see ``backtest.wfa``).
     """
-    folds: list[dict] = []
-    all_trades: list[dict] = []
-    combined_equity: list[float] = [params.balance]
-    running_balance = params.balance
-
-    for idx, (_train, test) in enumerate(iter_folds(df, cfg)):
-        if len(test) < 200:
-            continue
-        fold_params = params
-        result = simulate(test, fold_params)
-        summary = compute_summary(result)
-        summary['fold'] = idx
-        summary['test_from_ms'] = int(test['ts'].iloc[0])
-        summary['test_to_ms'] = int(test['ts'].iloc[-1])
-        summary['test_candles'] = len(test)
-        folds.append(summary)
-        for t in result['trades']:
-            # rebase each trade's pnl onto the rolling compound equity curve
-            running_balance += t['pnl_usdt']
-            combined_equity.append(running_balance)
-            all_trades.append(t)
-
-    aggregate = _aggregate(all_trades, combined_equity, params.balance)
+    wfa_cfg = WfaConfig(train_months=cfg.train_months,
+                        test_months=cfg.test_months,
+                        step_months=cfg.step_months)
+    outcome = run_wfa(df, list(candidates) if candidates else [params],
+                      simulate, wfa_cfg, label=params.label,
+                      initial_balance=params.balance,
+                      fold_summary_fn=_summarize_fold)
     return {
-        'config':    {
+        'config': {
             'train_months': cfg.train_months,
             'test_months':  cfg.test_months,
             'step_months':  cfg.step_months,
         },
-        'num_folds': len(folds),
-        'folds':     folds,
-        'aggregate': aggregate,
+        'num_folds':     outcome['num_folds'],
+        'folds':         outcome['folds'],
+        'n_evaluations': outcome['n_evaluations'],
+        'aggregate':     _legacy_aggregate_view(outcome),
     }
-
-
-def _aggregate(trades: list[dict], equity: list[float], initial: float) -> dict:
-    import math
-    out = {
-        'num_trades':         len(trades),
-        'initial_balance':    initial,
-        'final_balance':      round(equity[-1], 4),
-        'net_pnl_usdt':       round(equity[-1] - initial, 4),
-        'net_pnl_pct':        round((equity[-1] - initial) / initial * 100, 4),
-    }
-    if not trades:
-        out.update({'win_rate_pct': 0.0, 'sharpe_ratio': 0.0,
-                    'max_drawdown_pct': 0.0, 'profit_factor': 0.0})
-        return out
-    wins = [t for t in trades if t['result'] == 'WIN']
-    losses = [t for t in trades if t['result'] == 'LOSS']
-    total_wins = sum(t['pnl_usdt'] for t in wins)
-    total_losses = abs(sum(t['pnl_usdt'] for t in losses))
-    pf = total_wins / total_losses if total_losses > 0 else float('inf')
-
-    returns = [t['pnl_usdt'] / initial for t in trades]
-    mean_r = sum(returns) / len(returns)
-    var_r = sum((r - mean_r) ** 2 for r in returns) / max(1, len(returns) - 1)
-    std_r = math.sqrt(var_r) if var_r > 0 else 0.0
-    sharpe = (mean_r / std_r) if std_r > 0 else 0.0
-
-    peak = equity[0]
-    max_dd = 0.0
-    for v in equity:
-        peak = max(peak, v)
-        dd = (peak - v) / peak if peak > 0 else 0.0
-        max_dd = max(max_dd, dd)
-
-    out.update({
-        'win_rate_pct':     round(len(wins) / len(trades) * 100, 2),
-        'sharpe_ratio':     round(sharpe, 4),
-        'max_drawdown_pct': round(max_dd * 100, 4),
-        'profit_factor':    round(pf, 4) if pf != float('inf') else None,
-        'fees_paid_usdt':   round(sum(t['fees'] for t in trades), 4),
-        'slippage_cost_usdt': round(sum(t['slippage'] for t in trades), 4),
-    })
-    return out

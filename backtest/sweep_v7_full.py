@@ -98,135 +98,51 @@ def deflated_sharpe_pvalue(sr_obs: float, n_returns: int, n_trials: int,
     return statistics.NormalDist().cdf(z)
 
 
-def _slice_by_ts(df: pd.DataFrame, start_ms: int, end_ms: int) -> pd.DataFrame:
-    mask = (df['ts'] >= start_ms) & (df['ts'] < end_ms)
-    return df.loc[mask].reset_index(drop=True)
-
-
 def walk_forward_v7(df: pd.DataFrame, p: V7Params,
                     train_months: int = 3, test_months: int = 1,
-                    step_months: int = 1) -> dict:
-    """Walk-forward over *df* using simulate_v7. Train slice currently unused
-    (fixed-params); harness shape allows a parameter search to drop in later."""
-    train_ms = train_months * _APPROX_MS_PER_MONTH
-    test_ms = test_months * _APPROX_MS_PER_MONTH
-    step_ms = step_months * _APPROX_MS_PER_MONTH
-    start = int(df['ts'].iloc[0])
-    end = int(df['ts'].iloc[-1])
-    cursor = start
-    all_trades: list[dict] = []
-    folds: list[dict] = []
-    balance = p.balance
-    equity = [balance]
-    while cursor + train_ms + test_ms <= end:
-        test_slice = _slice_by_ts(df, cursor + train_ms, cursor + train_ms + test_ms)
-        if len(test_slice) >= 200:
-            # Use a per-fold V7Params with the slice's starting balance so
-            # the simulator's sizing reflects compounding across folds.
-            fold_params = replace(p, balance=balance)
-            r = simulate_v7(test_slice, fold_params)
-            summary = metrics_summary(r, initial_balance=balance)
-            folds.append(summary)
-            for t in r['trades']:
-                balance += t['pnl_usdt']
-                equity.append(balance)
-                all_trades.append(t)
-        cursor += step_ms
+                    step_months: int = 1,
+                    in_fold_candidates: list[V7Params] | None = None,
+                    min_train_trades: int = 15) -> dict:
+    """Walk-forward over *df* using simulate_v7, via the generic WFA engine.
+
+    Default (``in_fold_candidates=None``) is the historical fixed-params mode:
+    only ``p`` runs on each test slice and zero train evaluations happen.
+    With ``in_fold_candidates`` the engine simulates every candidate on each
+    TRAIN slice and only the per-fold winner runs the TEST slice; the returned
+    ``n_evaluations`` must be folded into the DSR ``n_trials`` by the caller.
+    """
+    # Imported here, not at module top: wfa imports this module's stats
+    # helpers, so a top-level import would be circular.
+    from backtest.wfa import WfaConfig, run_wfa
+    candidates = list(in_fold_candidates) if in_fold_candidates else [p]
+    cfg = WfaConfig(train_months=train_months, test_months=test_months,
+                    step_months=step_months, min_train_trades=min_train_trades)
+    outcome = run_wfa(df, candidates, simulate_v7, cfg, label=p.label,
+                      initial_balance=p.balance,
+                      fold_summary_fn=metrics_summary)
     return {
-        'folds': folds, 'trades': all_trades, 'equity': equity,
-        'num_folds': len(folds),
-        'initial_balance': p.balance, 'final_balance': round(balance, 4),
+        'folds': outcome['folds'], 'trades': outcome['trades'],
+        'equity': outcome['equity'], 'num_folds': outcome['num_folds'],
+        'initial_balance': outcome['initial_balance'],
+        'final_balance': outcome['final_balance'],
+        'n_evaluations': outcome['n_evaluations'],
     }
 
 
 def aggregate(wf: dict, params: V7Params, period_years: float,
               n_trials_for_dsr: int,
               sr_sample: list[float] | None = None) -> dict:
-    trades = wf['trades']
-    n = len(trades)
-    initial = wf['initial_balance']
-    final = wf['final_balance']
-    net_pnl = final - initial
-    base = {
-        'num_trades': n,
-        'num_folds': wf['num_folds'],
-        'folds_with_trades': sum(1 for f in wf['folds'] if f['num_trades'] > 0),
-        'net_pnl_usdt': round(net_pnl, 4),
-        'net_pnl_pct': round(net_pnl / initial * 100, 4),
-        'total_fees':  round(sum(t['pnl_usdt'] for t in trades) * 0, 4),  # placeholder
-    }
-    if n == 0:
-        base.update({'win_rate_pct': 0.0, 'sharpe_trade': 0.0,
-                     'sharpe_annual': 0.0, 'max_drawdown_pct': 0.0,
-                     'wr_lower_95': 0.0, 'profit_factor': 0.0,
-                     'dsr_pvalue': 0.0,
-                     'breakeven_wr_long':  round(breakeven_wr(params.sl_pct_long, params.tp_pct_long) * 100, 2),
-                     'breakeven_wr_short': round(breakeven_wr(params.sl_pct_short, params.tp_pct_short) * 100, 2),
-                     'by_side': {'long':  {'trades': 0, 'wins': 0, 'win_rate_pct': 0.0, 'pnl_usdt': 0.0},
-                                 'short': {'trades': 0, 'wins': 0, 'win_rate_pct': 0.0, 'pnl_usdt': 0.0}}})
-        return base
-    wins = [t for t in trades if t['result'] == 'WIN']
-    losses = [t for t in trades if t['result'] == 'LOSS']
-    total_w = sum(t['pnl_usdt'] for t in wins)
-    total_l = abs(sum(t['pnl_usdt'] for t in losses))
-    pf = total_w / total_l if total_l > 0 else float('inf')
-    returns = [t['pnl_pct'] / 100 for t in trades]
-    mean = sum(returns) / n
-    var = sum((r - mean) ** 2 for r in returns) / max(1, n - 1)
-    std = math.sqrt(var) if var > 0 else 0.0
-    sr = mean / std if std > 0 else 0.0
-    # Skew and kurtosis for DSR
-    if std > 0 and n >= 3:
-        m3 = sum((r - mean) ** 3 for r in returns) / n
-        m4 = sum((r - mean) ** 4 for r in returns) / n
-        skew = m3 / std ** 3
-        kurt = m4 / std ** 4
-    else:
-        skew, kurt = 0.0, 3.0
-    sr_ann = annualize(sr, n, period_years)
-    dsr_p = deflated_sharpe_pvalue(sr, n, n_trials_for_dsr, skew=skew,
-                                   kurt=kurt, sr_sample=sr_sample)
-    # Drawdown over the compounding equity curve
-    peak = wf['equity'][0]
-    max_dd = 0.0
-    for v in wf['equity']:
-        peak = max(peak, v)
-        dd = (peak - v) / peak if peak > 0 else 0
-        max_dd = max(max_dd, dd)
-    wr = len(wins) / n * 100
-    # Per-side breakdown
-    by_side = {'long': {'n': 0, 'w': 0, 'pnl': 0.0},
-               'short': {'n': 0, 'w': 0, 'pnl': 0.0}}
-    for t in trades:
-        s = t['side']
-        if s in by_side:
-            by_side[s]['n'] += 1
-            by_side[s]['w'] += int(t['result'] == 'WIN')
-            by_side[s]['pnl'] += t['pnl_usdt']
-    be_long = breakeven_wr(params.sl_pct_long, params.tp_pct_long) * 100
-    be_short = breakeven_wr(params.sl_pct_short, params.tp_pct_short) * 100
-    base.update({
-        'win_rate_pct':     round(wr, 2),
-        'wr_lower_95':      round(wilson_lower(wr / 100, n) * 100, 2),
-        'breakeven_wr_long':  round(be_long, 2),
-        'breakeven_wr_short': round(be_short, 2),
-        'sharpe_trade':     round(sr, 4),
-        'sharpe_annual':    round(sr_ann, 4),
-        'max_drawdown_pct': round(max_dd * 100, 4),
-        'profit_factor':    round(pf, 4) if pf != float('inf') else None,
-        'dsr_pvalue':       round(dsr_p, 4),
-        'returns_skew':     round(skew, 4),
-        'returns_kurt':     round(kurt, 4),
-        'by_side': {
-            s: {'trades': v['n'], 'wins': v['w'],
-                'win_rate_pct': round(v['w'] / v['n'] * 100, 2) if v['n'] else 0.0,
-                'wr_lower_95': round(wilson_lower(v['w'] / v['n'], v['n']) * 100, 2)
-                               if v['n'] else 0.0,
-                'pnl_usdt': round(v['pnl'], 4)}
-            for s, v in by_side.items()
-        },
-    })
-    return base
+    """Gate-compatible aggregate; math lives in ``backtest.wfa.aggregate_oos``
+    so the WFA engine and this sweep share one implementation."""
+    # Imported here, not at module top: wfa imports this module's stats
+    # helpers, so a top-level import would be circular.
+    from backtest.wfa import aggregate_oos
+    return aggregate_oos(
+        wf, period_years, n_trials_for_dsr,
+        breakeven_long_pct=breakeven_wr(params.sl_pct_long, params.tp_pct_long) * 100,
+        breakeven_short_pct=breakeven_wr(params.sl_pct_short, params.tp_pct_short) * 100,
+        sr_sample=sr_sample, label=params.label,
+    )
 
 
 def main() -> None:
@@ -282,9 +198,11 @@ def main() -> None:
     # (σ_SR=1.0 fallback) because the cross-trial σ_SR needs every variant's
     # per-trade Sharpe first.
     prelim = []
+    total_in_fold_evaluations = 0
     for v in variants:
         t0 = time.time()
         wf = walk_forward_v7(df, v)
+        total_in_fold_evaluations += wf.get('n_evaluations', 0)
         agg = aggregate(wf, v, period_years, n_trials_for_dsr=len(variants))
         prelim.append((v, agg, round(time.time() - t0, 2)))
 
@@ -294,11 +212,16 @@ def main() -> None:
     sr_sample = [agg['sharpe_trade'] for (_, agg, _) in prelim
                  if agg['num_trades'] > 0]
 
+    # Honest trial count: each in-fold candidate evaluation is one more bite
+    # at the selection-bias apple, so it deflates the Sharpe bar too. Zero in
+    # fixed-params mode — identical to the historical len(variants).
+    n_trials = len(variants) + total_in_fold_evaluations
+
     # Pass 2: recompute DSR for each variant against the real σ_SR.
     for (_, agg, _) in prelim:
         if agg['num_trades'] > 0:
             agg['dsr_pvalue'] = round(deflated_sharpe_pvalue(
-                agg['sharpe_trade'], agg['num_trades'], len(variants),
+                agg['sharpe_trade'], agg['num_trades'], n_trials,
                 skew=agg.get('returns_skew', 0.0),
                 kurt=agg.get('returns_kurt', 3.0),
                 sr_sample=sr_sample), 4)
@@ -351,6 +274,7 @@ def main() -> None:
                  'to_ms': int(df['ts'].iloc[-1])},
         'walk_forward': {'train_months': 3, 'test_months': 1, 'step_months': 1},
         'n_variants': len(variants),
+        'n_trials_for_dsr': n_trials,
         'results': results,
     }, indent=2, default=str))
     print(f'\nsaved: {out_path}')
