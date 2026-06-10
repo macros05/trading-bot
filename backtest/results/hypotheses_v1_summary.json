@@ -1,5 +1,5 @@
 {
-  "ran_at_ms": 1781108542133,
+  "ran_at_ms": 1781110250256,
   "walk_forward": {
     "train_months": 3,
     "test_months": 1,
@@ -23,7 +23,7 @@
     -0.4077,
     -0.3286
   ],
-  "runtime_sec": 341.2,
+  "runtime_sec": 333.5,
   "gate_thresholds": {
     "min_dsr": 0.95,
     "min_trades": 100,
@@ -41,7 +41,7 @@
       "label": "rsi_mr_5min__btc",
       "n_candidates": 18,
       "n_evaluations": 378,
-      "duration_sec": 32.5,
+      "duration_sec": 33.3,
       "trades_per_year": 646.4,
       "aggregate": {
         "label": "rsi_mr_5min__btc",
@@ -56,7 +56,7 @@
         "breakeven_wr_long": 53.97,
         "breakeven_wr_short": 53.97,
         "sharpe_trade": -0.3185,
-        "sharpe_annual": -7.5741,
+        "sharpe_annual": -8.0971,
         "max_drawdown_pct": 91.0284,
         "profit_factor": 0.4733,
         "dsr_pvalue": 0.0,
@@ -85,7 +85,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 30.92% <= breakeven 53.97% (side edge may be negative)",
           "net_pnl_pct -90.67% <= 0 (config lost money)",
-          "sharpe_annual -7.574 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -8.097 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.47 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 91.03% > ceiling 25.00% (path risk too high)"
         ]
@@ -97,7 +97,7 @@
       "label": "rsi_mr_15min__btc",
       "n_candidates": 18,
       "n_evaluations": 378,
-      "duration_sec": 15.5,
+      "duration_sec": 15.3,
       "trades_per_year": 256.3,
       "aggregate": {
         "label": "rsi_mr_15min__btc",
@@ -112,7 +112,7 @@
         "breakeven_wr_long": 49.27,
         "breakeven_wr_short": 49.27,
         "sharpe_trade": -0.2663,
-        "sharpe_annual": -3.9872,
+        "sharpe_annual": -4.2625,
         "max_drawdown_pct": 72.6074,
         "profit_factor": 0.5485,
         "dsr_pvalue": 0.0,
@@ -141,7 +141,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 30.11% <= breakeven 49.27% (side edge may be negative)",
           "net_pnl_pct -71.64% <= 0 (config lost money)",
-          "sharpe_annual -3.987 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -4.263 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.55 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 72.61% > ceiling 25.00% (path risk too high)"
         ]
@@ -153,7 +153,7 @@
       "label": "donchian_breakout_1h__btc",
       "n_candidates": 16,
       "n_evaluations": 336,
-      "duration_sec": 13.6,
+      "duration_sec": 12.5,
       "trades_per_year": 103.2,
       "aggregate": {
         "label": "donchian_breakout_1h__btc",
@@ -168,7 +168,7 @@
         "breakeven_wr_long": 42.04,
         "breakeven_wr_short": 42.04,
         "sharpe_trade": -0.2361,
-        "sharpe_annual": -2.2438,
+        "sharpe_annual": -2.3988,
         "max_drawdown_pct": 39.9406,
         "profit_factor": 0.5945,
         "dsr_pvalue": 0.0,
@@ -197,7 +197,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 23.03% <= breakeven 42.04% (side edge may be negative)",
           "net_pnl_pct -37.08% <= 0 (config lost money)",
-          "sharpe_annual -2.244 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -2.399 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.59 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 39.94% > ceiling 25.00% (path risk too high)"
         ]
@@ -209,7 +209,7 @@
       "label": "bb_rsi_15min__btc",
       "n_candidates": 4,
       "n_evaluations": 84,
-      "duration_sec": 2.5,
+      "duration_sec": 2.7,
       "trades_per_year": 570.5,
       "aggregate": {
         "label": "bb_rsi_15min__btc",
@@ -224,7 +224,7 @@
         "breakeven_wr_long": 62.57,
         "breakeven_wr_short": 62.57,
         "sharpe_trade": -0.5793,
-        "sharpe_annual": -12.9429,
+        "sharpe_annual": -13.8366,
         "max_drawdown_pct": 94.1251,
         "profit_factor": 0.298,
         "dsr_pvalue": 0.0,
@@ -253,7 +253,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 28.09% <= breakeven 62.57% (side edge may be negative)",
           "net_pnl_pct -94.13% <= 0 (config lost money)",
-          "sharpe_annual -12.943 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -13.837 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.30 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 94.13% > ceiling 25.00% (path risk too high)"
         ]
@@ -265,7 +265,7 @@
       "label": "baseline_live_v7__btc",
       "n_candidates": 1,
       "n_evaluations": 0,
-      "duration_sec": 49.6,
+      "duration_sec": 50.0,
       "trades_per_year": 1.2,
       "aggregate": {
         "label": "baseline_live_v7__btc",
@@ -280,7 +280,7 @@
         "breakeven_wr_long": 43.08,
         "breakeven_wr_short": 40.0,
         "sharpe_trade": 0.6192,
-        "sharpe_annual": 0.6237,
+        "sharpe_annual": 0.6667,
         "max_drawdown_pct": 0.2025,
         "profit_factor": 15.053,
         "dsr_pvalue": 0.0,
@@ -319,7 +319,7 @@
       "label": "rsi_mr_5min__eth",
       "n_candidates": 18,
       "n_evaluations": 378,
-      "duration_sec": 31.5,
+      "duration_sec": 30.9,
       "trades_per_year": 605.3,
       "aggregate": {
         "label": "rsi_mr_5min__eth",
@@ -334,7 +334,7 @@
         "breakeven_wr_long": 53.29,
         "breakeven_wr_short": 53.29,
         "sharpe_trade": -0.2978,
-        "sharpe_annual": -6.8523,
+        "sharpe_annual": -7.3254,
         "max_drawdown_pct": 93.1112,
         "profit_factor": 0.4937,
         "dsr_pvalue": 0.0,
@@ -363,7 +363,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 32.78% <= breakeven 53.29% (side edge may be negative)",
           "net_pnl_pct -92.53% <= 0 (config lost money)",
-          "sharpe_annual -6.852 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -7.325 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.49 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 93.11% > ceiling 25.00% (path risk too high)"
         ]
@@ -375,7 +375,7 @@
       "label": "rsi_mr_15min__eth",
       "n_candidates": 18,
       "n_evaluations": 378,
-      "duration_sec": 14.5,
+      "duration_sec": 15.0,
       "trades_per_year": 274.2,
       "aggregate": {
         "label": "rsi_mr_15min__eth",
@@ -390,7 +390,7 @@
         "breakeven_wr_long": 46.31,
         "breakeven_wr_short": 46.31,
         "sharpe_trade": -0.3066,
-        "sharpe_annual": -4.75,
+        "sharpe_annual": -5.078,
         "max_drawdown_pct": 82.1837,
         "profit_factor": 0.5121,
         "dsr_pvalue": 0.0,
@@ -419,7 +419,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 26.47% <= breakeven 46.31% (side edge may be negative)",
           "net_pnl_pct -81.61% <= 0 (config lost money)",
-          "sharpe_annual -4.750 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -5.078 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.51 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 82.18% > ceiling 25.00% (path risk too high)"
         ]
@@ -431,7 +431,7 @@
       "label": "donchian_breakout_1h__eth",
       "n_candidates": 16,
       "n_evaluations": 336,
-      "duration_sec": 12.7,
+      "duration_sec": 12.4,
       "trades_per_year": 113.6,
       "aggregate": {
         "label": "donchian_breakout_1h__eth",
@@ -446,7 +446,7 @@
         "breakeven_wr_long": 42.4,
         "breakeven_wr_short": 42.4,
         "sharpe_trade": -0.0564,
-        "sharpe_annual": -0.5628,
+        "sharpe_annual": -0.6017,
         "max_drawdown_pct": 18.0555,
         "profit_factor": 0.932,
         "dsr_pvalue": 0.0,
@@ -475,7 +475,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 32.72% <= breakeven 42.40% (side edge may be negative)",
           "net_pnl_pct -6.70% <= 0 (config lost money)",
-          "sharpe_annual -0.563 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -0.602 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.93 <= 1.00 (gross losses >= gross profits)"
         ]
       }
@@ -486,7 +486,7 @@
       "label": "bb_rsi_15min__eth",
       "n_candidates": 4,
       "n_evaluations": 84,
-      "duration_sec": 2.5,
+      "duration_sec": 2.7,
       "trades_per_year": 724.7,
       "aggregate": {
         "label": "bb_rsi_15min__eth",
@@ -501,7 +501,7 @@
         "breakeven_wr_long": 61.1,
         "breakeven_wr_short": 61.1,
         "sharpe_trade": -0.4941,
-        "sharpe_annual": -12.443,
+        "sharpe_annual": -13.3022,
         "max_drawdown_pct": 98.5105,
         "profit_factor": 0.3531,
         "dsr_pvalue": 0.0,
@@ -530,7 +530,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 31.43% <= breakeven 61.10% (side edge may be negative)",
           "net_pnl_pct -98.50% <= 0 (config lost money)",
-          "sharpe_annual -12.443 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -13.302 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.35 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 98.51% > ceiling 25.00% (path risk too high)"
         ]
@@ -542,7 +542,7 @@
       "label": "baseline_live_v7__eth",
       "n_candidates": 1,
       "n_evaluations": 0,
-      "duration_sec": 53.2,
+      "duration_sec": 50.0,
       "trades_per_year": 1.2,
       "aggregate": {
         "label": "baseline_live_v7__eth",
@@ -557,7 +557,7 @@
         "breakeven_wr_long": 43.08,
         "breakeven_wr_short": 40.0,
         "sharpe_trade": 1.1041,
-        "sharpe_annual": 1.1122,
+        "sharpe_annual": 1.1889,
         "max_drawdown_pct": 0.0,
         "profit_factor": null,
         "dsr_pvalue": 0.0,
@@ -596,7 +596,7 @@
       "label": "rsi_mr_5min__sol",
       "n_candidates": 18,
       "n_evaluations": 378,
-      "duration_sec": 31.8,
+      "duration_sec": 30.8,
       "trades_per_year": 848.2,
       "aggregate": {
         "label": "rsi_mr_5min__sol",
@@ -611,7 +611,7 @@
         "breakeven_wr_long": 50.16,
         "breakeven_wr_short": 50.16,
         "sharpe_trade": -0.2216,
-        "sharpe_annual": -6.0378,
+        "sharpe_annual": -6.4547,
         "max_drawdown_pct": 95.7864,
         "profit_factor": 0.6445,
         "dsr_pvalue": 0.0,
@@ -640,7 +640,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 34.95% <= breakeven 50.16% (side edge may be negative)",
           "net_pnl_pct -95.67% <= 0 (config lost money)",
-          "sharpe_annual -6.038 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -6.455 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.64 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 95.79% > ceiling 25.00% (path risk too high)"
         ]
@@ -652,7 +652,7 @@
       "label": "rsi_mr_15min__sol",
       "n_candidates": 18,
       "n_evaluations": 378,
-      "duration_sec": 14.0,
+      "duration_sec": 13.3,
       "trades_per_year": 226.7,
       "aggregate": {
         "label": "rsi_mr_15min__sol",
@@ -667,7 +667,7 @@
         "breakeven_wr_long": 43.49,
         "breakeven_wr_short": 43.49,
         "sharpe_trade": -0.2013,
-        "sharpe_annual": -2.8357,
+        "sharpe_annual": -3.0315,
         "max_drawdown_pct": 65.4478,
         "profit_factor": 0.6562,
         "dsr_pvalue": 0.0,
@@ -696,7 +696,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 28.76% <= breakeven 43.49% (side edge may be negative)",
           "net_pnl_pct -64.26% <= 0 (config lost money)",
-          "sharpe_annual -2.836 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -3.031 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.66 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 65.45% > ceiling 25.00% (path risk too high)"
         ]
@@ -708,7 +708,7 @@
       "label": "donchian_breakout_1h__sol",
       "n_candidates": 16,
       "n_evaluations": 336,
-      "duration_sec": 12.0,
+      "duration_sec": 12.2,
       "trades_per_year": 116.0,
       "aggregate": {
         "label": "donchian_breakout_1h__sol",
@@ -723,7 +723,7 @@
         "breakeven_wr_long": 40.21,
         "breakeven_wr_short": 40.21,
         "sharpe_trade": 0.0047,
-        "sharpe_annual": 0.0475,
+        "sharpe_annual": 0.0508,
         "max_drawdown_pct": 19.7736,
         "profit_factor": 0.8854,
         "dsr_pvalue": 0.0,
@@ -777,7 +777,7 @@
         "breakeven_wr_long": 58.63,
         "breakeven_wr_short": 58.63,
         "sharpe_trade": -0.4077,
-        "sharpe_annual": -9.6739,
+        "sharpe_annual": -10.3418,
         "max_drawdown_pct": 97.1443,
         "profit_factor": 0.414,
         "dsr_pvalue": 0.0,
@@ -806,7 +806,7 @@
           "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
           "long side WR 95% LB 33.53% <= breakeven 58.63% (side edge may be negative)",
           "net_pnl_pct -97.12% <= 0 (config lost money)",
-          "sharpe_annual -9.674 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -10.342 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.41 <= 1.00 (gross losses >= gross profits)",
           "max_drawdown_pct 97.14% > ceiling 25.00% (path risk too high)"
         ]
@@ -818,7 +818,7 @@
       "label": "baseline_live_v7__sol",
       "n_candidates": 1,
       "n_evaluations": 0,
-      "duration_sec": 52.0,
+      "duration_sec": 49.2,
       "trades_per_year": 1.2,
       "aggregate": {
         "label": "baseline_live_v7__sol",
@@ -833,7 +833,7 @@
         "breakeven_wr_long": 43.08,
         "breakeven_wr_short": 40.0,
         "sharpe_trade": -0.3286,
-        "sharpe_annual": -0.331,
+        "sharpe_annual": -0.3538,
         "max_drawdown_pct": 2.3474,
         "profit_factor": 0.3624,
         "dsr_pvalue": 0.0,
@@ -863,7 +863,7 @@
           "num_trades 2 < required 100 (sample too small to be statistically meaningful)",
           "win-rate 95% lower bound 9.45% <= breakeven 43.08% (edge may be negative)",
           "net_pnl_pct -1.51% <= 0 (config lost money)",
-          "sharpe_annual -0.331 <= 0 (no positive risk-adjusted return)",
+          "sharpe_annual -0.354 <= 0 (no positive risk-adjusted return)",
           "profit_factor 0.36 <= 1.00 (gross losses >= gross profits)",
           "OOS fold coverage 0.10 (2/21) < required 0.60 (edge concentrated \u2014 overfit signature)"
         ]
