@@ -1,0 +1,15 @@
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+FROM base AS bot
+CMD ["python", "main.py"]
+
+FROM base AS api
+EXPOSE 8001
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8001"]

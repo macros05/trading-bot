@@ -1,7 +1,31 @@
+# Secrets and credentials
 .env
-bot_state.json
-logs/
+
+# Bytecode and venvs
 __pycache__/
-venv/
 *.pyc
 *.pyo
+venv/
+
+# Runtime state files (managed by the bot, reconciled with the exchange on start)
+bot_state.json
+bot_health.json
+trades_history.json
+data/bot_state.json
+data/bot_health.json
+data/trades_history.json
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Runtime logs (rotated locally)
+*.log
+*.log.[0-9]*
+*.log.[0-9]*.gz
+logs/
+
+# Backtest binary caches (regenerable from raw OHLCV)
+backtest/results/_cache_*.pkl
+
+# One-off audit / scan outputs
+audit-report.json

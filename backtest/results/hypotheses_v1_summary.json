@@ -1,0 +1,873 @@
+{
+  "ran_at_ms": 1781110250256,
+  "walk_forward": {
+    "train_months": 3,
+    "test_months": 1,
+    "step_months": 1
+  },
+  "n_trials_for_dsr": 171,
+  "sr_sample": [
+    -0.3185,
+    -0.2663,
+    -0.2361,
+    -0.5793,
+    0.6192,
+    -0.2978,
+    -0.3066,
+    -0.0564,
+    -0.4941,
+    1.1041,
+    -0.2216,
+    -0.2013,
+    0.0047,
+    -0.4077,
+    -0.3286
+  ],
+  "runtime_sec": 333.5,
+  "gate_thresholds": {
+    "min_dsr": 0.95,
+    "min_trades": 100,
+    "min_side_trades": 30,
+    "require_positive_pnl": true,
+    "require_positive_sharpe": true,
+    "min_profit_factor": 1.0,
+    "max_drawdown_pct": 25.0,
+    "min_fold_coverage": 0.6
+  },
+  "results": [
+    {
+      "family": "rsi_mr_5min",
+      "symbol": "BTC/USDT",
+      "label": "rsi_mr_5min__btc",
+      "n_candidates": 18,
+      "n_evaluations": 378,
+      "duration_sec": 33.3,
+      "trades_per_year": 646.4,
+      "aggregate": {
+        "label": "rsi_mr_5min__btc",
+        "num_trades": 1115,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9067.4563,
+        "net_pnl_pct": -90.6746,
+        "total_fees": 0.0,
+        "win_rate_pct": 33.63,
+        "wr_lower_95": 30.92,
+        "breakeven_wr_long": 53.97,
+        "breakeven_wr_short": 53.97,
+        "sharpe_trade": -0.3185,
+        "sharpe_annual": -8.0971,
+        "max_drawdown_pct": 91.0284,
+        "profit_factor": 0.4733,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.5387,
+        "returns_kurt": 3.6915,
+        "by_side": {
+          "long": {
+            "trades": 1115,
+            "wins": 375,
+            "win_rate_pct": 33.63,
+            "wr_lower_95": 30.92,
+            "pnl_usdt": -9067.4563
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 30.92% <= breakeven 53.97% (side edge may be negative)",
+          "net_pnl_pct -90.67% <= 0 (config lost money)",
+          "sharpe_annual -8.097 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.47 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 91.03% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "rsi_mr_15min",
+      "symbol": "BTC/USDT",
+      "label": "rsi_mr_15min__btc",
+      "n_candidates": 18,
+      "n_evaluations": 378,
+      "duration_sec": 15.3,
+      "trades_per_year": 256.3,
+      "aggregate": {
+        "label": "rsi_mr_15min__btc",
+        "num_trades": 442,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -7163.8513,
+        "net_pnl_pct": -71.6385,
+        "total_fees": 0.0,
+        "win_rate_pct": 34.39,
+        "wr_lower_95": 30.11,
+        "breakeven_wr_long": 49.27,
+        "breakeven_wr_short": 49.27,
+        "sharpe_trade": -0.2663,
+        "sharpe_annual": -4.2625,
+        "max_drawdown_pct": 72.6074,
+        "profit_factor": 0.5485,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.8546,
+        "returns_kurt": 2.6632,
+        "by_side": {
+          "long": {
+            "trades": 442,
+            "wins": 152,
+            "win_rate_pct": 34.39,
+            "wr_lower_95": 30.11,
+            "pnl_usdt": -7163.8513
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 30.11% <= breakeven 49.27% (side edge may be negative)",
+          "net_pnl_pct -71.64% <= 0 (config lost money)",
+          "sharpe_annual -4.263 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.55 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 72.61% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "donchian_breakout_1h",
+      "symbol": "BTC/USDT",
+      "label": "donchian_breakout_1h__btc",
+      "n_candidates": 16,
+      "n_evaluations": 336,
+      "duration_sec": 12.5,
+      "trades_per_year": 103.2,
+      "aggregate": {
+        "label": "donchian_breakout_1h__btc",
+        "num_trades": 178,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -3707.9487,
+        "net_pnl_pct": -37.0795,
+        "total_fees": 0.0,
+        "win_rate_pct": 29.21,
+        "wr_lower_95": 23.03,
+        "breakeven_wr_long": 42.04,
+        "breakeven_wr_short": 42.04,
+        "sharpe_trade": -0.2361,
+        "sharpe_annual": -2.3988,
+        "max_drawdown_pct": 39.9406,
+        "profit_factor": 0.5945,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 1.1104,
+        "returns_kurt": 4.4378,
+        "by_side": {
+          "long": {
+            "trades": 178,
+            "wins": 52,
+            "win_rate_pct": 29.21,
+            "wr_lower_95": 23.03,
+            "pnl_usdt": -3707.9487
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 23.03% <= breakeven 42.04% (side edge may be negative)",
+          "net_pnl_pct -37.08% <= 0 (config lost money)",
+          "sharpe_annual -2.399 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.59 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 39.94% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "bb_rsi_15min",
+      "symbol": "BTC/USDT",
+      "label": "bb_rsi_15min__btc",
+      "n_candidates": 4,
+      "n_evaluations": 84,
+      "duration_sec": 2.7,
+      "trades_per_year": 570.5,
+      "aggregate": {
+        "label": "bb_rsi_15min__btc",
+        "num_trades": 984,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9412.5147,
+        "net_pnl_pct": -94.1251,
+        "total_fees": 0.0,
+        "win_rate_pct": 30.89,
+        "wr_lower_95": 28.09,
+        "breakeven_wr_long": 62.57,
+        "breakeven_wr_short": 62.57,
+        "sharpe_trade": -0.5793,
+        "sharpe_annual": -13.8366,
+        "max_drawdown_pct": 94.1251,
+        "profit_factor": 0.298,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.9424,
+        "returns_kurt": 4.3421,
+        "by_side": {
+          "long": {
+            "trades": 984,
+            "wins": 304,
+            "win_rate_pct": 30.89,
+            "wr_lower_95": 28.09,
+            "pnl_usdt": -9412.5147
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 28.09% <= breakeven 62.57% (side edge may be negative)",
+          "net_pnl_pct -94.13% <= 0 (config lost money)",
+          "sharpe_annual -13.837 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.30 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 94.13% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "baseline_live_v7",
+      "symbol": "BTC/USDT",
+      "label": "baseline_live_v7__btc",
+      "n_candidates": 1,
+      "n_evaluations": 0,
+      "duration_sec": 50.0,
+      "trades_per_year": 1.2,
+      "aggregate": {
+        "label": "baseline_live_v7__btc",
+        "num_trades": 2,
+        "num_folds": 21,
+        "folds_with_trades": 2,
+        "net_pnl_usdt": 284.5692,
+        "net_pnl_pct": 2.8457,
+        "total_fees": 0.0,
+        "win_rate_pct": 50.0,
+        "wr_lower_95": 9.45,
+        "breakeven_wr_long": 43.08,
+        "breakeven_wr_short": 40.0,
+        "sharpe_trade": 0.6192,
+        "sharpe_annual": 0.6667,
+        "max_drawdown_pct": 0.2025,
+        "profit_factor": 15.053,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.0,
+        "returns_kurt": 3.0,
+        "by_side": {
+          "long": {
+            "trades": 2,
+            "wins": 1,
+            "win_rate_pct": 50.0,
+            "wr_lower_95": 9.45,
+            "pnl_usdt": 284.5692
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "num_trades 2 < required 100 (sample too small to be statistically meaningful)",
+          "win-rate 95% lower bound 9.45% <= breakeven 43.08% (edge may be negative)",
+          "OOS fold coverage 0.10 (2/21) < required 0.60 (edge concentrated \u2014 overfit signature)"
+        ]
+      }
+    },
+    {
+      "family": "rsi_mr_5min",
+      "symbol": "ETH/USDT",
+      "label": "rsi_mr_5min__eth",
+      "n_candidates": 18,
+      "n_evaluations": 378,
+      "duration_sec": 30.9,
+      "trades_per_year": 605.3,
+      "aggregate": {
+        "label": "rsi_mr_5min__eth",
+        "num_trades": 1044,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9253.0309,
+        "net_pnl_pct": -92.5303,
+        "total_fees": 0.0,
+        "win_rate_pct": 35.63,
+        "wr_lower_95": 32.78,
+        "breakeven_wr_long": 53.29,
+        "breakeven_wr_short": 53.29,
+        "sharpe_trade": -0.2978,
+        "sharpe_annual": -7.3254,
+        "max_drawdown_pct": 93.1112,
+        "profit_factor": 0.4937,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.7233,
+        "returns_kurt": 2.8373,
+        "by_side": {
+          "long": {
+            "trades": 1044,
+            "wins": 372,
+            "win_rate_pct": 35.63,
+            "wr_lower_95": 32.78,
+            "pnl_usdt": -9253.0309
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 32.78% <= breakeven 53.29% (side edge may be negative)",
+          "net_pnl_pct -92.53% <= 0 (config lost money)",
+          "sharpe_annual -7.325 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.49 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 93.11% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "rsi_mr_15min",
+      "symbol": "ETH/USDT",
+      "label": "rsi_mr_15min__eth",
+      "n_candidates": 18,
+      "n_evaluations": 378,
+      "duration_sec": 15.0,
+      "trades_per_year": 274.2,
+      "aggregate": {
+        "label": "rsi_mr_15min__eth",
+        "num_trades": 473,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -8160.5718,
+        "net_pnl_pct": -81.6057,
+        "total_fees": 0.0,
+        "win_rate_pct": 30.44,
+        "wr_lower_95": 26.47,
+        "breakeven_wr_long": 46.31,
+        "breakeven_wr_short": 46.31,
+        "sharpe_trade": -0.3066,
+        "sharpe_annual": -5.078,
+        "max_drawdown_pct": 82.1837,
+        "profit_factor": 0.5121,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 1.0649,
+        "returns_kurt": 2.9004,
+        "by_side": {
+          "long": {
+            "trades": 473,
+            "wins": 144,
+            "win_rate_pct": 30.44,
+            "wr_lower_95": 26.47,
+            "pnl_usdt": -8160.5718
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 26.47% <= breakeven 46.31% (side edge may be negative)",
+          "net_pnl_pct -81.61% <= 0 (config lost money)",
+          "sharpe_annual -5.078 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.51 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 82.18% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "donchian_breakout_1h",
+      "symbol": "ETH/USDT",
+      "label": "donchian_breakout_1h__eth",
+      "n_candidates": 16,
+      "n_evaluations": 336,
+      "duration_sec": 12.4,
+      "trades_per_year": 113.6,
+      "aggregate": {
+        "label": "donchian_breakout_1h__eth",
+        "num_trades": 196,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -670.2726,
+        "net_pnl_pct": -6.7027,
+        "total_fees": 0.0,
+        "win_rate_pct": 39.29,
+        "wr_lower_95": 32.72,
+        "breakeven_wr_long": 42.4,
+        "breakeven_wr_short": 42.4,
+        "sharpe_trade": -0.0564,
+        "sharpe_annual": -0.6017,
+        "max_drawdown_pct": 18.0555,
+        "profit_factor": 0.932,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.3753,
+        "returns_kurt": 2.297,
+        "by_side": {
+          "long": {
+            "trades": 196,
+            "wins": 77,
+            "win_rate_pct": 39.29,
+            "wr_lower_95": 32.72,
+            "pnl_usdt": -670.2726
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 32.72% <= breakeven 42.40% (side edge may be negative)",
+          "net_pnl_pct -6.70% <= 0 (config lost money)",
+          "sharpe_annual -0.602 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.93 <= 1.00 (gross losses >= gross profits)"
+        ]
+      }
+    },
+    {
+      "family": "bb_rsi_15min",
+      "symbol": "ETH/USDT",
+      "label": "bb_rsi_15min__eth",
+      "n_candidates": 4,
+      "n_evaluations": 84,
+      "duration_sec": 2.7,
+      "trades_per_year": 724.7,
+      "aggregate": {
+        "label": "bb_rsi_15min__eth",
+        "num_trades": 1250,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9849.6753,
+        "net_pnl_pct": -98.4968,
+        "total_fees": 0.0,
+        "win_rate_pct": 34.0,
+        "wr_lower_95": 31.43,
+        "breakeven_wr_long": 61.1,
+        "breakeven_wr_short": 61.1,
+        "sharpe_trade": -0.4941,
+        "sharpe_annual": -13.3022,
+        "max_drawdown_pct": 98.5105,
+        "profit_factor": 0.3531,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.8396,
+        "returns_kurt": 4.9749,
+        "by_side": {
+          "long": {
+            "trades": 1250,
+            "wins": 425,
+            "win_rate_pct": 34.0,
+            "wr_lower_95": 31.43,
+            "pnl_usdt": -9849.6753
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 31.43% <= breakeven 61.10% (side edge may be negative)",
+          "net_pnl_pct -98.50% <= 0 (config lost money)",
+          "sharpe_annual -13.302 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.35 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 98.51% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "baseline_live_v7",
+      "symbol": "ETH/USDT",
+      "label": "baseline_live_v7__eth",
+      "n_candidates": 1,
+      "n_evaluations": 0,
+      "duration_sec": 50.0,
+      "trades_per_year": 1.2,
+      "aggregate": {
+        "label": "baseline_live_v7__eth",
+        "num_trades": 2,
+        "num_folds": 21,
+        "folds_with_trades": 2,
+        "net_pnl_usdt": 305.5374,
+        "net_pnl_pct": 3.0554,
+        "total_fees": 0.0,
+        "win_rate_pct": 100.0,
+        "wr_lower_95": 34.24,
+        "breakeven_wr_long": 43.08,
+        "breakeven_wr_short": 40.0,
+        "sharpe_trade": 1.1041,
+        "sharpe_annual": 1.1889,
+        "max_drawdown_pct": 0.0,
+        "profit_factor": null,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.0,
+        "returns_kurt": 3.0,
+        "by_side": {
+          "long": {
+            "trades": 2,
+            "wins": 2,
+            "win_rate_pct": 100.0,
+            "wr_lower_95": 34.24,
+            "pnl_usdt": 305.5374
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "num_trades 2 < required 100 (sample too small to be statistically meaningful)",
+          "win-rate 95% lower bound 34.24% <= breakeven 43.08% (edge may be negative)",
+          "OOS fold coverage 0.10 (2/21) < required 0.60 (edge concentrated \u2014 overfit signature)"
+        ]
+      }
+    },
+    {
+      "family": "rsi_mr_5min",
+      "symbol": "SOL/USDT",
+      "label": "rsi_mr_5min__sol",
+      "n_candidates": 18,
+      "n_evaluations": 378,
+      "duration_sec": 30.8,
+      "trades_per_year": 848.2,
+      "aggregate": {
+        "label": "rsi_mr_5min__sol",
+        "num_trades": 1463,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9566.7578,
+        "net_pnl_pct": -95.6676,
+        "total_fees": 0.0,
+        "win_rate_pct": 37.39,
+        "wr_lower_95": 34.95,
+        "breakeven_wr_long": 50.16,
+        "breakeven_wr_short": 50.16,
+        "sharpe_trade": -0.2216,
+        "sharpe_annual": -6.4547,
+        "max_drawdown_pct": 95.7864,
+        "profit_factor": 0.6445,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.734,
+        "returns_kurt": 2.5281,
+        "by_side": {
+          "long": {
+            "trades": 1463,
+            "wins": 547,
+            "win_rate_pct": 37.39,
+            "wr_lower_95": 34.95,
+            "pnl_usdt": -9566.7578
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 34.95% <= breakeven 50.16% (side edge may be negative)",
+          "net_pnl_pct -95.67% <= 0 (config lost money)",
+          "sharpe_annual -6.455 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.64 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 95.79% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "rsi_mr_15min",
+      "symbol": "SOL/USDT",
+      "label": "rsi_mr_15min__sol",
+      "n_candidates": 18,
+      "n_evaluations": 378,
+      "duration_sec": 13.3,
+      "trades_per_year": 226.7,
+      "aggregate": {
+        "label": "rsi_mr_15min__sol",
+        "num_trades": 391,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -6426.1502,
+        "net_pnl_pct": -64.2615,
+        "total_fees": 0.0,
+        "win_rate_pct": 33.25,
+        "wr_lower_95": 28.76,
+        "breakeven_wr_long": 43.49,
+        "breakeven_wr_short": 43.49,
+        "sharpe_trade": -0.2013,
+        "sharpe_annual": -3.0315,
+        "max_drawdown_pct": 65.4478,
+        "profit_factor": 0.6562,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.8347,
+        "returns_kurt": 2.38,
+        "by_side": {
+          "long": {
+            "trades": 391,
+            "wins": 130,
+            "win_rate_pct": 33.25,
+            "wr_lower_95": 28.76,
+            "pnl_usdt": -6426.1502
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 28.76% <= breakeven 43.49% (side edge may be negative)",
+          "net_pnl_pct -64.26% <= 0 (config lost money)",
+          "sharpe_annual -3.031 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.66 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 65.45% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "donchian_breakout_1h",
+      "symbol": "SOL/USDT",
+      "label": "donchian_breakout_1h__sol",
+      "n_candidates": 16,
+      "n_evaluations": 336,
+      "duration_sec": 12.2,
+      "trades_per_year": 116.0,
+      "aggregate": {
+        "label": "donchian_breakout_1h__sol",
+        "num_trades": 200,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -1263.4081,
+        "net_pnl_pct": -12.6341,
+        "total_fees": 0.0,
+        "win_rate_pct": 40.5,
+        "wr_lower_95": 33.94,
+        "breakeven_wr_long": 40.21,
+        "breakeven_wr_short": 40.21,
+        "sharpe_trade": 0.0047,
+        "sharpe_annual": 0.0508,
+        "max_drawdown_pct": 19.7736,
+        "profit_factor": 0.8854,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 2.4944,
+        "returns_kurt": 16.4474,
+        "by_side": {
+          "long": {
+            "trades": 200,
+            "wins": 81,
+            "win_rate_pct": 40.5,
+            "wr_lower_95": 33.94,
+            "pnl_usdt": -1263.4081
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 33.94% <= breakeven 40.21% (side edge may be negative)",
+          "net_pnl_pct -12.63% <= 0 (config lost money)",
+          "profit_factor 0.89 <= 1.00 (gross losses >= gross profits)"
+        ]
+      }
+    },
+    {
+      "family": "bb_rsi_15min",
+      "symbol": "SOL/USDT",
+      "label": "bb_rsi_15min__sol",
+      "n_candidates": 4,
+      "n_evaluations": 84,
+      "duration_sec": 2.7,
+      "trades_per_year": 643.5,
+      "aggregate": {
+        "label": "bb_rsi_15min__sol",
+        "num_trades": 1110,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9711.7523,
+        "net_pnl_pct": -97.1175,
+        "total_fees": 0.0,
+        "win_rate_pct": 36.31,
+        "wr_lower_95": 33.53,
+        "breakeven_wr_long": 58.63,
+        "breakeven_wr_short": 58.63,
+        "sharpe_trade": -0.4077,
+        "sharpe_annual": -10.3418,
+        "max_drawdown_pct": 97.1443,
+        "profit_factor": 0.414,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.7332,
+        "returns_kurt": 3.8989,
+        "by_side": {
+          "long": {
+            "trades": 1110,
+            "wins": 403,
+            "win_rate_pct": 36.31,
+            "wr_lower_95": 33.53,
+            "pnl_usdt": -9711.7523
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "long side WR 95% LB 33.53% <= breakeven 58.63% (side edge may be negative)",
+          "net_pnl_pct -97.12% <= 0 (config lost money)",
+          "sharpe_annual -10.342 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.41 <= 1.00 (gross losses >= gross profits)",
+          "max_drawdown_pct 97.14% > ceiling 25.00% (path risk too high)"
+        ]
+      }
+    },
+    {
+      "family": "baseline_live_v7",
+      "symbol": "SOL/USDT",
+      "label": "baseline_live_v7__sol",
+      "n_candidates": 1,
+      "n_evaluations": 0,
+      "duration_sec": 49.2,
+      "trades_per_year": 1.2,
+      "aggregate": {
+        "label": "baseline_live_v7__sol",
+        "num_trades": 2,
+        "num_folds": 21,
+        "folds_with_trades": 2,
+        "net_pnl_usdt": -150.9536,
+        "net_pnl_pct": -1.5095,
+        "total_fees": 0.0,
+        "win_rate_pct": 50.0,
+        "wr_lower_95": 9.45,
+        "breakeven_wr_long": 43.08,
+        "breakeven_wr_short": 40.0,
+        "sharpe_trade": -0.3286,
+        "sharpe_annual": -0.3538,
+        "max_drawdown_pct": 2.3474,
+        "profit_factor": 0.3624,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.0,
+        "returns_kurt": 3.0,
+        "by_side": {
+          "long": {
+            "trades": 2,
+            "wins": 1,
+            "win_rate_pct": 50.0,
+            "wr_lower_95": 9.45,
+            "pnl_usdt": -150.9536
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      },
+      "gate": {
+        "passed": false,
+        "reasons": [
+          "DSR p-value 0.000 < required 0.95 (Sharpe indistinguishable from luck)",
+          "num_trades 2 < required 100 (sample too small to be statistically meaningful)",
+          "win-rate 95% lower bound 9.45% <= breakeven 43.08% (edge may be negative)",
+          "net_pnl_pct -1.51% <= 0 (config lost money)",
+          "sharpe_annual -0.354 <= 0 (no positive risk-adjusted return)",
+          "profit_factor 0.36 <= 1.00 (gross losses >= gross profits)",
+          "OOS fold coverage 0.10 (2/21) < required 0.60 (edge concentrated \u2014 overfit signature)"
+        ]
+      }
+    }
+  ]
+}

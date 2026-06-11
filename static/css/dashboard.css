@@ -1,0 +1,142 @@
+/* ── Scanline overlay ──────────────────────────────────────────────────── */
+.scanlines {
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, .025) 2px,
+    rgba(0, 0, 0, .025) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Typography base ───────────────────────────────────────────────────── */
+body { font-family: 'JetBrains Mono', 'Courier New', monospace; }
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #030712; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+
+/* ── Panel base ────────────────────────────────────────────────────────── */
+.panel {
+  background: #080f1e;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 16px;
+  animation: fadeUp 0.35s ease-out both;
+}
+
+/* ── Stat card ─────────────────────────────────────────────────────────── */
+.stat-card {
+  background: #080f1e;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 16px 18px 14px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeUp 0.35s ease-out both;
+}
+/* top accent hairline */
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 15%; right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,.25), transparent);
+}
+.stat-card:nth-child(1) { animation-delay:  0ms; }
+.stat-card:nth-child(2) { animation-delay: 55ms; }
+.stat-card:nth-child(3) { animation-delay: 110ms; }
+.stat-card:nth-child(4) { animation-delay: 165ms; }
+.stat-card:nth-child(5) { animation-delay: 220ms; }
+
+/* ── Labels ────────────────────────────────────────────────────────────── */
+.panel-title,
+.stat-label {
+  font-size: 9px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #475569;
+  margin-bottom: 4px;
+}
+.stat-sub {
+  font-size: 10px;
+  color: #334155;
+  margin-top: 4px;
+  letter-spacing: .06em;
+}
+
+/* ── Table headers ─────────────────────────────────────────────────────── */
+.th {
+  text-align: left;
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: #475569;
+  padding: 0 12px 10px;
+  font-weight: 500;
+}
+
+/* ── Log container ─────────────────────────────────────────────────────── */
+#log-lines {
+  height: 228px;
+  overflow-y: auto;
+  background: #030712;
+  border: 1px solid #0f172a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* ── Connection pulse dot ──────────────────────────────────────────────── */
+.pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: blink 2.2s ease-in-out infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .25; }
+}
+
+/* ── Price flash ───────────────────────────────────────────────────────── */
+@keyframes flash-up {
+  0%   { color: #4ade80; text-shadow: 0 0 8px rgba(74,222,128,.4); }
+  100% { color: inherit; text-shadow: none; }
+}
+@keyframes flash-down {
+  0%   { color: #f87171; text-shadow: 0 0 8px rgba(248,113,113,.4); }
+  100% { color: inherit; text-shadow: none; }
+}
+.flash-up   { animation: flash-up   0.7s ease-out; }
+.flash-down { animation: flash-down 0.7s ease-out; }
+
+/* ── Fade-up entrance ──────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Winrate progress bar ──────────────────────────────────────────────── */
+.winrate-track {
+  height: 2px;
+  background: #1e293b;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.winrate-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width .8s cubic-bezier(0.4, 0, 0.2, 1),
+              background .4s ease;
+}

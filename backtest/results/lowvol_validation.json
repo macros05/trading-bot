@@ -1,0 +1,100 @@
+{
+  "symbol": "BTC/USDT",
+  "timeframe": "1m",
+  "lookback_days": 28,
+  "candles": 40321,
+  "params_new": {
+    "long_rsi": 45.0,
+    "short_rsi": 53.0,
+    "long_sl": 0.012,
+    "long_tp": 0.018,
+    "short_sl": 0.012,
+    "short_tp": 0.018,
+    "max_hold_hours": 12
+  },
+  "params_old": {
+    "long_rsi": 40.0,
+    "short_rsi": 55.0,
+    "long_sl": 0.025,
+    "long_tp": 0.04,
+    "short_sl": 0.035,
+    "short_tp": 0.06,
+    "max_hold_hours": 0.0
+  },
+  "results_new": {
+    "long_only": {
+      "trades": 44,
+      "win_rate": 0.5227,
+      "pnl_pct_total": 9.0727,
+      "sharpe": 0.1648,
+      "avg_hold_hours": 9.09,
+      "exits": {
+        "stop_loss": 12,
+        "take_profit": 11,
+        "time_exit": 21
+      }
+    },
+    "short_only": {
+      "trades": 59,
+      "win_rate": 0.4237,
+      "pnl_pct_total": -5.3473,
+      "sharpe": -0.0852,
+      "avg_hold_hours": 9.68,
+      "exits": {
+        "stop_loss": 17,
+        "take_profit": 7,
+        "time_exit": 35
+      }
+    },
+    "combined": {
+      "trades": 64,
+      "win_rate": 0.4688,
+      "pnl_pct_total": 0.0785,
+      "sharpe": 0.0011,
+      "avg_hold_hours": 9.39,
+      "exits": {
+        "stop_loss": 19,
+        "take_profit": 9,
+        "time_exit": 36
+      }
+    }
+  },
+  "results_old": {
+    "long_only": {
+      "trades": 4,
+      "win_rate": 0.75,
+      "pnl_pct_total": 9.1134,
+      "sharpe": 0.6415,
+      "avg_hold_hours": 58.26,
+      "exits": {
+        "stop_loss": 1,
+        "take_profit": 3,
+        "time_exit": 0
+      }
+    },
+    "short_only": {
+      "trades": 4,
+      "win_rate": 0.0,
+      "pnl_pct_total": -14.1567,
+      "sharpe": -78.35,
+      "avg_hold_hours": 142.87,
+      "exits": {
+        "stop_loss": 4,
+        "take_profit": 0,
+        "time_exit": 0
+      }
+    },
+    "combined": {
+      "trades": 4,
+      "win_rate": 0.25,
+      "pnl_pct_total": -6.7488,
+      "sharpe": -0.4417,
+      "avg_hold_hours": 151.32,
+      "exits": {
+        "stop_loss": 3,
+        "take_profit": 1,
+        "time_exit": 0
+      }
+    }
+  }
+}

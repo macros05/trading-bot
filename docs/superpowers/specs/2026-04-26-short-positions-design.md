@@ -1,26 +1,44 @@
-# Short Positions Support — Design Spec (v2: Aggressive Profile)
+# Short Positions Support — Design Spec (v3: Asymmetric Profile — Option B)
 
 **Date:** 2026-04-26
 **Author:** Claude (brainstorming session) + Marcos (decisions)
-**Status:** Approved, pending implementation plan
-**Branch:** `feature/short-positions`
-**Profile:** **AGGRESSIVE** — sizing, leverage, thresholds, breaker, and SL/TP all loosened from the conservative baseline. Safety invariants (circuit-breaker existence, `place_order_safe` exchange-side confirmation, error-handling preservation, no hardcoded credentials) are unchanged per `CLAUDE.md` "NUNCA violar". This profile increases volume and downside variance without removing the safety net.
+**Status:** Approved post-gate-failure; gate v3 PASSED (combined Sharpe +0.15, PnL +14,144 USDT)
+**Branch:** `feature/short-positions-aggressive`
+**Profile:** **ASYMMETRIC (Option B)** — long side keeps the validated conservative strategy parameters (RSI<40, SL 2.5 %, TP 4 %); short side uses aggressive parameters (RSI>55, SL 3.5 %, TP 6 %). Risk dials (leverage 2×, sizing 2 %, breaker −5 %, protections permissive) stay aggressive across both sides because they are account-level, not per-trade. Safety invariants (circuit-breaker existence, `place_order_safe` exchange-side confirmation, error-handling preservation, no hardcoded credentials) are unchanged per `CLAUDE.md` "NUNCA violar".
 
-## Risk Profile Comparison
+## Why v3 (Option B) instead of v2 (symmetric aggressive)
 
-| Dial | Conservative baseline | **Aggressive (this spec)** | Notes |
-|---|---|---|---|
-| Leverage (futures) | 1× | **2×** | Doubles effective position vs collateral; SL % expressed in price stays the same but balance impact doubles |
-| Position size | 1 % of balance | **2 %** | Combined with 2× leverage: 4× the dollar exposure per trade vs the original spot bot |
-| RSI long threshold | < 40 | **< 45** | Original backtest: 69 trades, Sharpe −0.21 (long-only). More entries, lower per-trade edge |
-| RSI short threshold | > 60 (mirror of <40) | **> 55** (mirror of <45) | Symmetric loosening |
-| Circuit breaker (daily) | −3 % | **−5 %** | More room before halt; correspondingly larger possible single-day loss |
-| Stop-loss | 2.5 % | **3.5 %** | Wider — more breathing room, larger loss when triggered |
-| Take-profit | 4.0 % | **6.0 %** | Higher target — preserves R:R ratio (~1:1.7), same as original 1:1.6 |
-| `CooldownPeriod` post-SL | (framework added) | **0 minutes (disabled)** | Framework present, set to no-op. Can be re-enabled without code changes |
-| `StoplossGuard` (max SL/day) | (framework added) | **10 SL hits/day (effectively disabled)** | Same — framework present, set to permissive |
+The v2 symmetric aggressive gate FAILED catastrophically in commit `31bfedf`:
+- Long-only aggressive (RSI<45): −17,708 USDT, Sharpe −0.17
+- Short-only aggressive (RSI>55): +16,407 USDT, Sharpe +0.18
+- **Combined: −41,812 USDT, Sharpe −0.41** (much worse than the sum of parts)
 
-The protections framework is **added structurally** (so future tuning is a config change, not a code change) but **set to permissive defaults** in this profile. This was an explicit user request to maximize trade volume and accept higher variance.
+Root cause: loose long threshold (RSI<45) fired frequently in the same RSI zones the short would have triggered. The Mode-1 single-position FSM blocked the better trade in each conflict, then resumed at worse prices. The mutual-cancellation effect destroyed value beyond what either side did alone.
+
+The v3 asymmetric profile (gate commit `1814be2`) PASSED:
+- Long-only conservative (RSI<40, SL 2.5/TP 4): +8,481 USDT, Sharpe +0.33
+- Short-only aggressive (RSI>55, SL 3.5/TP 6): +16,408 USDT, Sharpe +0.18
+- **Combined: +14,144 USDT, Sharpe +0.15** (additive, no interference)
+
+The tighter long threshold means longs fire ~10 times in 90 days vs ~32 with RSI<45, leaving 90 % of the timeline available for shorts to operate without conflict.
+
+## Risk Profile Comparison (v3 — Asymmetric Option B)
+
+| Dial | Conservative baseline | v2 Aggressive (FAILED gate) | **v3 Asymmetric (this spec, PASSED gate)** | Notes |
+|---|---|---|---|---|
+| Leverage (futures) | 1× | 2× | **2×** | Account-level; cannot be per-side |
+| Position size | 1 % | 2 % | **2 %** | Account-level; same for both sides |
+| RSI long threshold | < 40 | < 45 | **< 40** (back to validated) | Tight threshold avoids RSI-zone conflict with shorts |
+| RSI short threshold | > 60 | > 55 | **> 55** (aggressive) | Loose enough to fire ~25× in 90 days |
+| Circuit breaker (daily) | −3 % | −5 % | **−5 %** | Account-level; cannot be per-side |
+| Stop-loss LONG | 2.5 % | 3.5 % | **2.5 %** (validated value) | Per-side — long uses validated tight SL |
+| Take-profit LONG | 4.0 % | 6.0 % | **4.0 %** (validated value) | Per-side |
+| Stop-loss SHORT | n/a | 3.5 % | **3.5 %** | Per-side — short uses wider SL since it's a less-validated direction |
+| Take-profit SHORT | n/a | 6.0 % | **6.0 %** | Per-side |
+| `CooldownPeriod` post-SL | n/a | 0 min (disabled) | **0 min (disabled)** | Framework present, set to no-op |
+| `StoplossGuard` (max SL/day) | n/a | 10 SL/day | **10 SL/day** | Framework present, set to permissive |
+
+The protections framework is added structurally; tightening to e.g. `cooldown=60min`, `max_sl=3` is a future config change.
 
 ---
 

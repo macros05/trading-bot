@@ -193,5 +193,157 @@ class TestShouldEnterWithVolume(unittest.TestCase):
         ))
 
 
+class TestShouldEnterShort(unittest.TestCase):
+    def test_returns_true_when_rsi_above_threshold_and_close_below_sma(self):
+        from strategy.signals import should_enter_short
+        self.assertTrue(should_enter_short(close=99.0, sma20=100.0, rsi14=56.0,
+                                           rsi_threshold=55.0))
+
+    def test_returns_false_when_rsi_at_threshold(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=99.0, sma20=100.0, rsi14=55.0,
+                                            rsi_threshold=55.0))
+
+    def test_returns_false_when_close_at_sma(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=100.0, sma20=100.0, rsi14=70.0,
+                                            rsi_threshold=55.0))
+
+    def test_returns_false_when_close_above_sma(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=101.0, sma20=100.0, rsi14=70.0,
+                                            rsi_threshold=55.0))
+
+    def test_default_threshold_is_55(self):
+        from strategy.signals import should_enter_short
+        self.assertTrue(should_enter_short(close=99.0, sma20=100.0, rsi14=56.0))
+        self.assertFalse(should_enter_short(close=99.0, sma20=100.0, rsi14=55.0))
+
+    def test_volume_filter_skipped_when_either_arg_none(self):
+        from strategy.signals import should_enter_short
+        self.assertTrue(should_enter_short(close=99, sma20=100, rsi14=70,
+                                           volume=10, volume_sma20=None))
+        self.assertTrue(should_enter_short(close=99, sma20=100, rsi14=70,
+                                           volume=None, volume_sma20=10))
+
+    def test_volume_filter_blocks_when_volume_below_threshold(self):
+        from strategy.signals import should_enter_short
+        self.assertFalse(should_enter_short(close=99, sma20=100, rsi14=70,
+                                            volume=5, volume_sma20=10,
+                                            volume_factor=1.2))
+
+
+class TestCheckExitPriceSideAware(unittest.TestCase):
+    def test_long_default_keeps_existing_semantics(self):
+        from strategy.signals import check_exit_price
+        # SL=95, TP=104 (long convention sl<entry<tp)
+        self.assertEqual(check_exit_price(95.0, 95.0, 104.0), 'stop_loss')
+        self.assertEqual(check_exit_price(104.0, 95.0, 104.0), 'take_profit')
+        self.assertIsNone(check_exit_price(100.0, 95.0, 104.0))
+
+    def test_short_inverts_comparison(self):
+        from strategy.signals import check_exit_price
+        # SL=103.5, TP=94 (short convention tp<entry<sl)
+        self.assertEqual(check_exit_price(103.5, 103.5, 94.0, side='short'),
+                         'stop_loss')
+        self.assertEqual(check_exit_price(94.0, 103.5, 94.0, side='short'),
+                         'take_profit')
+        self.assertIsNone(check_exit_price(100.0, 103.5, 94.0, side='short'))
+
+    def test_invalid_side_raises(self):
+        from strategy.signals import check_exit_price
+        with self.assertRaises(ValueError):
+            check_exit_price(100.0, 95.0, 104.0, side='neutral')
+
+
+class TestCalcPnlShort(unittest.TestCase):
+    def test_positive_pnl_when_close_below_entry(self):
+        from strategy.signals import calc_pnl_short
+        pnl_usdt, pnl_pct = calc_pnl_short(close=95.0, entry_price=100.0, qty=2.0)
+        self.assertAlmostEqual(pnl_usdt, 10.0)
+        self.assertAlmostEqual(pnl_pct, 5.0)
+
+    def test_negative_pnl_when_close_above_entry(self):
+        from strategy.signals import calc_pnl_short
+        pnl_usdt, pnl_pct = calc_pnl_short(close=110.0, entry_price=100.0, qty=1.0)
+        self.assertAlmostEqual(pnl_usdt, -10.0)
+        self.assertAlmostEqual(pnl_pct, -10.0)
+
+    def test_signs_mirror_long_calc_pnl(self):
+        from strategy.signals import calc_pnl, calc_pnl_short
+        long_pnl, _ = calc_pnl(close=110.0, entry_price=100.0, qty=1.0)
+        short_pnl, _ = calc_pnl_short(close=110.0, entry_price=100.0, qty=1.0)
+        self.assertAlmostEqual(long_pnl, -short_pnl)
+
+
+class TestCheckExitShort(unittest.TestCase):
+    def test_stop_loss_trips_above_entry(self):
+        from strategy.signals import check_exit_short
+        # Aggressive short profile: SL 3.5 % above entry
+        self.assertEqual(check_exit_short(close=103.5, entry_price=100.0,
+                                          stop_loss_pct=0.035, take_profit_pct=0.06),
+                         'stop_loss')
+
+    def test_take_profit_trips_below_entry(self):
+        from strategy.signals import check_exit_short
+        self.assertEqual(check_exit_short(close=94.0, entry_price=100.0,
+                                          stop_loss_pct=0.035, take_profit_pct=0.06),
+                         'take_profit')
+
+    def test_returns_none_inside_band(self):
+        from strategy.signals import check_exit_short
+        self.assertIsNone(check_exit_short(close=99.0, entry_price=100.0,
+                                           stop_loss_pct=0.035, take_profit_pct=0.06))
+        self.assertIsNone(check_exit_short(close=101.0, entry_price=100.0,
+                                           stop_loss_pct=0.035, take_profit_pct=0.06))
+
+
+class TestUpdateTrailingStopShort(unittest.TestCase):
+    def test_no_change_below_50pct_progress(self):
+        from strategy.signals import update_trailing_stop_short
+        # entry=100, tp=90, sl=110. close=98 → progress=(100-98)/(100-90)=0.20
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=90.0, close=98.0, atr_val=1.0),
+            110.0,
+        )
+
+    def test_moves_to_breakeven_at_50pct(self):
+        from strategy.signals import update_trailing_stop_short
+        # close=95 → progress=0.50 → SL moves to entry=100
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=90.0, close=95.0, atr_val=1.0),
+            100.0,
+        )
+
+    def test_trails_at_75pct(self):
+        from strategy.signals import update_trailing_stop_short
+        # close=92.5 → progress=0.75 → SL = close + atr = 92.5 + 1 = 93.5
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=90.0, close=92.5, atr_val=1.0),
+            93.5,
+        )
+
+    def test_sl_only_moves_down_for_shorts(self):
+        from strategy.signals import update_trailing_stop_short
+        # SL already at 95; new candidate at 100 should NOT raise it
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=95.0, entry_price=100.0,
+                                       tp_price=90.0, close=95.0, atr_val=1.0),
+            95.0,
+        )
+
+    def test_invalid_setup_returns_unchanged(self):
+        from strategy.signals import update_trailing_stop_short
+        # tp >= entry is invalid for a short
+        self.assertEqual(
+            update_trailing_stop_short(sl_price=110.0, entry_price=100.0,
+                                       tp_price=100.0, close=95.0, atr_val=1.0),
+            110.0,
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

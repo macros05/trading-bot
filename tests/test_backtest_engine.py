@@ -42,6 +42,7 @@ from backtest.engine import (
     _VOL_SMA_PERIOD,
     ParamSet,
 )
+from config import RISK_PCT
 from strategy.indicators import rsi, sma
 
 
@@ -170,7 +171,7 @@ class TestProcessBarConfigEntry(unittest.TestCase):
 
     def test_qty_equals_risk_fraction_of_balance_divided_by_close(self):
         new_pos, _, _ = _process_bar_config(100.0, 90.0, 30.0, 0, None, _BALANCE, 35.0, _SL_PCT, _TP_PCT)
-        expected_qty = (_BALANCE * 0.01) / 100.0   # _RISK_PCT = 0.01
+        expected_qty = (_BALANCE * RISK_PCT) / 100.0
         self.assertAlmostEqual(new_pos['qty'], expected_qty, places=6)
 
     def test_balance_is_unchanged_on_entry(self):
@@ -609,6 +610,48 @@ class TestWinnerVolConstant(unittest.TestCase):
 
     def test_winner_vol_strategy_is_rsi_sma(self):
         self.assertEqual(_WINNER_VOL.strategy, 'rsi_sma')
+
+
+# ---------------------------------------------------------------------------
+# simulate_tick — pure per-tick exit decision (long + short)
+# ---------------------------------------------------------------------------
+
+class TestSimulateTick(unittest.TestCase):
+
+    def test_simulate_tick_short_take_profit(self):
+        """Short closes at TP when price drops below entry × (1 - tp_pct)."""
+        from backtest.engine import simulate_tick
+        state = {'side': 'short', 'entry_price': 100.0, 'qty': 1.0, 'sl_pct': 0.035, 'tp_pct': 0.06}
+        result = simulate_tick(close=93.0, state=state)
+        self.assertEqual(result['exit_reason'], 'take_profit')
+        self.assertGreater(result['pnl_usdt'], 0)
+        self.assertAlmostEqual(result['pnl_usdt'], 7.0, places=6)  # (100 - 93) * 1
+
+    def test_simulate_tick_short_stop_loss(self):
+        """Short closes at SL when price rises above entry × (1 + sl_pct)."""
+        from backtest.engine import simulate_tick
+        state = {'side': 'short', 'entry_price': 100.0, 'qty': 1.0, 'sl_pct': 0.035, 'tp_pct': 0.06}
+        result = simulate_tick(close=104.0, state=state)
+        self.assertEqual(result['exit_reason'], 'stop_loss')
+        self.assertLess(result['pnl_usdt'], 0)
+        self.assertAlmostEqual(result['pnl_usdt'], -4.0, places=6)  # (100 - 104) * 1
+
+    def test_simulate_tick_long_unchanged(self):
+        """Long behavior identical to pre-refactor."""
+        from backtest.engine import simulate_tick
+        state = {'side': 'long', 'entry_price': 100.0, 'qty': 1.0, 'sl_pct': 0.025, 'tp_pct': 0.04}
+        self.assertEqual(simulate_tick(close=104.5, state=state)['exit_reason'], 'take_profit')
+        self.assertEqual(simulate_tick(close=97.0,  state=state)['exit_reason'], 'stop_loss')
+        self.assertIsNone(simulate_tick(close=101.0, state=state)['exit_reason'])
+
+    def test_simulate_tick_invalid_side_raises(self):
+        from backtest.engine import simulate_tick
+        with self.assertRaises(ValueError):
+            simulate_tick(
+                close=100.0,
+                state={'side': 'both', 'entry_price': 100.0, 'qty': 1.0,
+                       'sl_pct': 0.03, 'tp_pct': 0.05},
+            )
 
 
 if __name__ == '__main__':

@@ -16,7 +16,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from core.loop import trading_loop
+from core.loop import (
+    trading_loop,
+    run_safe_tick,
+    CriticalTradingError,
+    _LoopState,
+)
 from core.macro_filter import AGGRESSIVE, NORMAL, NO_TRADE
 from core.state import BotState
 from data.candles import CandleBuffer
@@ -28,14 +33,24 @@ from data.candles import CandleBuffer
 
 def _config() -> dict:
     return {
-        'symbol':           'BTC/USDT',
-        'timeframe':        '1m',
-        'limit':            200,
-        'interval_seconds': 60,
-        'paper_balance':    10_000.0,
-        'risk_pct':         0.01,
-        'stop_loss_pct':    0.02,
-        'take_profit_pct':  0.03,
+        'symbol':                 'BTC/USDT',
+        'timeframe':              '1m',
+        'limit':                  200,
+        'interval_seconds':       60,
+        'paper_balance':          10_000.0,
+        'risk_pct':               0.01,
+        'stop_loss_pct_long':     0.02,
+        'take_profit_pct_long':   0.03,
+        'stop_loss_pct_short':    0.035,
+        'take_profit_pct_short':  0.060,
+        'rsi_threshold':          40.0,
+        'rsi_short_threshold':    55.0,
+        # Keep the legacy test suite focused on WAITING/IN_POSITION transitions;
+        # trailing stop, ATR exits and regime filters have their own tests.
+        'use_atr_exits':          False,
+        'use_trailing_stop':      False,
+        'use_adx_filter':         False,
+        'use_trend_filter':       False,
     }
 
 
@@ -161,6 +176,20 @@ class TestBufferNotReady(unittest.IsolatedAsyncioTestCase):
 
 class TestEntrySignal(unittest.IsolatedAsyncioTestCase):
 
+    def setUp(self):
+        # Isolate from any real data/pause.flag in the working directory —
+        # these tests assume trading is not paused. Without this they break
+        # when the live bot has been paused via the flag file.
+        import tempfile
+        from pathlib import Path
+        self._pause_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._pause_dir.cleanup)
+        pause_patch = patch(
+            'core.loop._PAUSE_FILE', Path(self._pause_dir.name) / 'pause.flag'
+        )
+        pause_patch.start()
+        self.addCleanup(pause_patch.stop)
+
     async def test_opens_position_when_signal_fires(self):
         state_manager = _mock_state(BotState.WAITING_SIGNAL)
         risk = _mock_risk(position_size=100.0)
@@ -229,7 +258,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
     async def test_logs_unrealized_pnl_each_tick(self):
         state_manager = _mock_state(BotState.IN_POSITION, position=self._position(100.0, 1.0))
 
-        with patch('core.loop.check_exit', return_value=None), \
+        with patch('core.loop.check_exit_price', return_value=None), \
              patch('core.loop.logger') as mock_logger:
             await _run_one_tick(
                 _mock_client(_candles(25, close=101.0)),
@@ -244,7 +273,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
         risk = _mock_risk()
 
-        with patch('core.loop.check_exit', return_value='stop_loss'), \
+        with patch('core.loop.check_exit_price', return_value='stop_loss'), \
              patch('core.loop._save_trade') as mock_save:
             await _run_one_tick(
                 _mock_client(_candles(25, close=97.0)),
@@ -261,7 +290,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
         risk = _mock_risk()
 
-        with patch('core.loop.check_exit', return_value='take_profit'), \
+        with patch('core.loop.check_exit_price', return_value='take_profit'), \
              patch('core.loop._save_trade') as mock_save:
             await _run_one_tick(
                 _mock_client(_candles(25, close=104.0)),
@@ -279,7 +308,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
         risk = _mock_risk()
 
-        with patch('core.loop.check_exit', return_value='take_profit'), \
+        with patch('core.loop.check_exit_price', return_value='take_profit'), \
              patch('core.loop.calc_pnl', return_value=(3.0, 3.0)), \
              patch('core.loop._save_trade'):
             await _run_one_tick(
@@ -294,7 +323,7 @@ class TestInPosition(unittest.IsolatedAsyncioTestCase):
         position = self._position()
         state_manager = _mock_state(BotState.IN_POSITION, position=position)
 
-        with patch('core.loop.check_exit', return_value=None):
+        with patch('core.loop.check_exit_price', return_value=None):
             await _run_one_tick(
                 _mock_client(_candles(25, close=101.0)),
                 CandleBuffer(), state_manager, _mock_risk(),
@@ -352,13 +381,20 @@ class TestMisc(unittest.IsolatedAsyncioTestCase):
 class TestMacroFilterGate(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_trade_does_not_evaluate_signals(self):
-        """When macro mode is NO_TRADE, callback returns early — no state access."""
+        """When macro mode is NO_TRADE, the tick still runs but long signals are blocked.
+
+        NO_TRADE now passes macro_mode into _handle_waiting_signal rather than
+        short-circuiting the entire tick — shorts are still allowed (spec §4).
+        """
         state_manager = _mock_state()
-        await _run_one_tick(
-            _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
-            macro_filter=_mock_macro_filter(NO_TRADE),
-        )
-        state_manager.get_state.assert_not_called()
+        with patch('core.loop.should_enter', return_value=False), \
+             patch('core.loop.should_enter_short', return_value=False):
+            await _run_one_tick(
+                _mock_client(_candles(25)), CandleBuffer(), state_manager, _mock_risk(),
+                macro_filter=_mock_macro_filter(NO_TRADE),
+            )
+        # get_state IS called now — tick runs fully, macro_mode blocks long entry
+        state_manager.get_state.assert_called_once()
 
     async def test_normal_mode_evaluates_signals(self):
         """NORMAL macro mode proceeds to signal evaluation."""
@@ -393,6 +429,505 @@ class TestMacroFilterGate(unittest.IsolatedAsyncioTestCase):
             macro_filter=mf,
         )
         mf.get_mode.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# Dual-direction entry signals
+# ---------------------------------------------------------------------------
+
+class TestDualDirectionSignals(unittest.IsolatedAsyncioTestCase):
+    """_handle_waiting_signal opens long on long signal, short on short signal,
+    nothing on contradictory or no signal."""
+
+    def _cfg(self):
+        from core.loop import _parse_config
+        return _parse_config({
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0,
+            'leverage': 2,
+        })
+
+    async def test_short_signal_opens_short_position(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        cfg = self._cfg()
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+        # close=99, sma=100 (close<sma), rsi=70 (>55) → short signal
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=99.0, sma_val=100.0, rsi_val=70.0,
+            atr_val=None, adx_val=None,
+        )
+        sm.set_position.assert_called_once()
+        opened = sm.set_position.call_args[0][0]
+        self.assertEqual(opened['side'], 'short')
+
+    async def test_long_signal_opens_long_position(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        cfg = self._cfg()
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+        # close=101, sma=100 (close>sma), rsi=30 (<40) → long signal
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=101.0, sma_val=100.0, rsi_val=30.0,
+            atr_val=None, adx_val=None,
+        )
+        sm.set_position.assert_called_once()
+        opened = sm.set_position.call_args[0][0]
+        self.assertEqual(opened['side'], 'long')
+
+    async def test_no_signal_no_entry(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        cfg = self._cfg()
+        sm = MagicMock()
+        rm = MagicMock()
+        # close=100, sma=100, rsi=50 → neither signal fires
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=100.0, sma_val=100.0, rsi_val=50.0,
+            atr_val=None, adx_val=None,
+        )
+        sm.set_position.assert_not_called()
+        self.assertIsNone(notif)
+
+
+# ---------------------------------------------------------------------------
+# Macro filter side asymmetry
+# ---------------------------------------------------------------------------
+
+class TestMacroFilterSideAsymmetry(unittest.IsolatedAsyncioTestCase):
+    """Per spec §4: NO_TRADE blocks longs only; shorts proceed."""
+
+    async def test_macro_no_trade_blocks_long_signal(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        from core.macro_filter import NO_TRADE
+
+        cfg_dict = {
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 1,
+        }
+        from core.loop import _parse_config
+        cfg = _parse_config(cfg_dict)
+
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+
+        # Long signal: close=101, sma=100, rsi=30 → would fire long
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=101.0, sma_val=100.0, rsi_val=30.0,
+            atr_val=None, adx_val=None, macro_mode=NO_TRADE,
+        )
+        # Long should be blocked by NO_TRADE
+        sm.set_position.assert_not_called()
+        self.assertIsNone(notif)
+
+    async def test_macro_no_trade_allows_short_signal(self):
+        from unittest.mock import MagicMock
+        from core.loop import _handle_waiting_signal
+        from core.macro_filter import NO_TRADE
+
+        from core.loop import _parse_config
+        cfg = _parse_config({
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 1,
+        })
+
+        sm = MagicMock()
+        rm = MagicMock()
+        rm.position_size.return_value = 1000.0
+
+        # Short signal: close=99, sma=100, rsi=70 → short fires
+        notif = _handle_waiting_signal(
+            sm, rm, cfg, close=99.0, sma_val=100.0, rsi_val=70.0,
+            atr_val=None, adx_val=None, macro_mode=NO_TRADE,
+        )
+        # Short should still open despite NO_TRADE
+        sm.set_position.assert_called_once()
+        opened = sm.set_position.call_args[0][0]
+        self.assertEqual(opened['side'], 'short')
+
+
+# ---------------------------------------------------------------------------
+# Side-aware exit
+# ---------------------------------------------------------------------------
+
+class TestSideAwareExit(unittest.IsolatedAsyncioTestCase):
+    def _cfg(self):
+        from core.loop import _parse_config
+        return _parse_config({
+            'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+            'paper_balance': 10_000.0, 'risk_pct': 0.02,
+            'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+            'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+            'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 2,
+        })
+
+    async def test_short_take_profit_calls_calc_pnl_short(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from core.loop import _handle_in_position
+        from core.state import BotState, StateManager
+        from risk.manager import RiskManager
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            sm.set_position({
+                'side': 'short', 'entry_price': 100.0, 'qty': 1.0,
+                'ts': 1, 'sl_price': 103.5, 'tp_price': 94.0,
+            })
+            sm.set_state(BotState.IN_POSITION)
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=2)
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'):
+                notif = _handle_in_position(sm, rm, self._cfg(), close=94.0, atr_val=None)
+            self.assertIsNotNone(notif)
+            self.assertIn('TAKE_PROFIT', notif.upper())
+            # Daily PnL should be POSITIVE for a short that hit TP
+            self.assertGreater(rm.get_daily_pnl(), 0)
+
+    async def test_short_stop_loss_negative_pnl(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from core.loop import _handle_in_position
+        from core.state import BotState, StateManager
+        from risk.manager import RiskManager
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            sm.set_position({
+                'side': 'short', 'entry_price': 100.0, 'qty': 1.0,
+                'ts': 1, 'sl_price': 103.5, 'tp_price': 94.0,
+            })
+            sm.set_state(BotState.IN_POSITION)
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=2)
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'):
+                notif = _handle_in_position(sm, rm, self._cfg(), close=103.5, atr_val=None)
+            self.assertIn('STOP_LOSS', notif.upper())
+            self.assertLess(rm.get_daily_pnl(), 0)
+
+
+# ---------------------------------------------------------------------------
+# ProtectionStack integration
+# ---------------------------------------------------------------------------
+
+class TestProtectionsIntegration(unittest.IsolatedAsyncioTestCase):
+    async def test_blocked_protection_skips_signal_evaluation(self):
+        """When protections.is_blocked() returns True, _process_tick is skipped."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import MagicMock, patch
+        from core.loop import trading_loop
+        from core.state import StateManager, BotState
+        from data.candles import CandleBuffer
+        from risk.manager import RiskManager
+        from risk.protections import ProtectionStack
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=1)
+            buf = CandleBuffer(maxlen=200)
+
+            class _AlwaysBlock:
+                def is_blocked(self, now_ms, trades_history):
+                    return True, 'test block'
+
+            stack = ProtectionStack([_AlwaysBlock()])
+
+            cfg = {
+                'symbol': 'BTC/USDT', 'timeframe': '1m', 'interval_seconds': 60,
+                'limit': 200, 'paper_balance': 10_000.0,
+                'risk_pct': 0.02,
+                'stop_loss_pct_long': 0.025, 'take_profit_pct_long': 0.040,
+                'stop_loss_pct_short': 0.035, 'take_profit_pct_short': 0.060,
+                'rsi_threshold': 40.0, 'rsi_short_threshold': 55.0, 'leverage': 1,
+            }
+
+            client = MagicMock()
+
+            async def _capture(symbol, timeframe, callback, **kwargs):
+                await callback([{'ts': 0, 'open': 100, 'high': 101, 'low': 99,
+                                 'close': 100, 'volume': 1.0}])
+            client.watch_candles = _capture
+
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'), \
+                 patch('core.loop._HEALTH_FILE', tmpdir / 'health.json'):
+                await trading_loop(client, buf, sm, rm, cfg, protections=stack)
+            # Position should never have been opened
+            self.assertEqual(sm.get_state(), BotState.WAITING_SIGNAL)
+            self.assertIsNone(sm.get_position())
+
+
+# ---------------------------------------------------------------------------
+# Watchdog heartbeat — health must update even when trading is blocked
+# ---------------------------------------------------------------------------
+
+class TestHeartbeatWhenBlocked(unittest.IsolatedAsyncioTestCase):
+    """The watchdog (main.py) restarts the loop when bot_health.json's
+    last_tick_ms goes stale (>300s). A tripped circuit breaker or protection
+    must NOT starve the heartbeat — otherwise the loop is restarted forever
+    while doing no useful work (the livelock observed 2026-05-26)."""
+
+    @staticmethod
+    def _fresh(health_path) -> int:
+        import json
+        import time
+        data = json.loads(health_path.read_text())
+        return int(time.time() * 1000) - int(data['last_tick_ms'])
+
+    async def test_heartbeat_written_when_circuit_breaker_active(self):
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            health = Path(tmp) / 'health.json'
+            with patch('core.loop._HEALTH_FILE', health):
+                await _run_one_tick(
+                    _mock_client(_candles(25)), CandleBuffer(), _mock_state(),
+                    _mock_risk(circuit_breaker=True, daily_pnl=-0.05),
+                )
+            self.assertTrue(
+                health.exists(),
+                'heartbeat must keep bot_health.json fresh even when the '
+                'circuit breaker blocks trading',
+            )
+            self.assertLess(self._fresh(health), 10_000)
+
+    async def test_heartbeat_written_when_protections_block(self):
+        import tempfile
+        from pathlib import Path
+        from core.state import StateManager
+        from risk.manager import RiskManager
+        from risk.protections import ProtectionStack
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            health = tmpdir / 'health.json'
+            sm = StateManager(state_file=tmpdir / 'state.json')
+            rm = RiskManager(max_daily_drawdown=0.05, leverage=1)
+            buf = CandleBuffer(maxlen=200)
+
+            class _AlwaysBlock:
+                def is_blocked(self, now_ms, trades_history):
+                    return True, 'test block'
+
+            stack = ProtectionStack([_AlwaysBlock()])
+
+            client = MagicMock()
+
+            async def _capture(symbol, timeframe, callback, **kwargs):
+                await callback(_candles(25))
+            client.watch_candles = _capture
+
+            with patch('core.loop._TRADES_FILE', tmpdir / 'trades.json'), \
+                 patch('core.loop._HEALTH_FILE', health):
+                await trading_loop(client, buf, sm, rm, _config(), protections=stack)
+
+            self.assertTrue(
+                health.exists(),
+                'heartbeat must keep bot_health.json fresh even when a '
+                'protection blocks trading',
+            )
+            self.assertLess(self._fresh(health), 10_000)
+
+    async def test_heartbeat_syncs_authoritative_state_when_blocked(self):
+        """A guard early-return (e.g. circuit breaker) skips _process_tick and
+        therefore _update_health. The heartbeat must still sync the
+        authoritative state from bot_state.json so the snapshot does not get
+        stuck on a stale value (observed: health stuck IN_POSITION after the
+        position had already closed and the machine reset to WAITING_SIGNAL)."""
+        import json
+        import tempfile
+        import time
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpdir = Path(tmp)
+            health = tmpdir / 'health.json'
+            state = tmpdir / 'state.json'
+            health.write_text(json.dumps({
+                'last_tick_ms': int(time.time() * 1000) - 120_000,
+                'state': 'IN_POSITION',
+            }))
+            state.write_text(json.dumps(
+                {'state': 'WAITING_SIGNAL', 'position': None}
+            ))
+            with patch('core.loop._HEALTH_FILE', health), \
+                 patch('core.loop._STATE_FILE', state), \
+                 patch('core.loop._PAUSE_FILE', tmpdir / 'pause.flag'):
+                await _run_one_tick(
+                    _mock_client(_candles(25)), CandleBuffer(), _mock_state(),
+                    _mock_risk(circuit_breaker=True, daily_pnl=-0.05),
+                )
+            snapshot = json.loads(health.read_text())
+            self.assertEqual(
+                snapshot['state'], 'WAITING_SIGNAL',
+                'heartbeat must sync state from bot_state.json on a guard '
+                'early-return, not leave a stale IN_POSITION',
+            )
+            self.assertFalse(snapshot['paused'])
+            self.assertLess(self._fresh(health), 10_000)
+
+
+# ---------------------------------------------------------------------------
+# Health file must always be valid JSON (no NaN/Infinity tokens)
+# ---------------------------------------------------------------------------
+
+class TestHealthNoNaN(unittest.TestCase):
+    """bot_health.json must be strict-valid JSON. RSI is NaN during warmup; if
+    written as the literal `NaN` token the file is invalid JSON and the API
+    /health endpoint 500s (Starlette serializes with allow_nan=False). That
+    made the bots-watchdog see the bot as unreachable and restart the container
+    every 2 min (root cause #2 of the 2026-05-26 restart loop)."""
+
+    @staticmethod
+    def _assert_strict_json(path) -> None:
+        import json
+        json.loads(
+            path.read_text(),
+            parse_constant=lambda tok: (_ for _ in ()).throw(ValueError(tok)),
+        )
+
+    def test_update_health_with_nan_writes_valid_json(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from core.loop import _update_health
+        from core.state import BotState
+
+        with tempfile.TemporaryDirectory() as tmp:
+            health = Path(tmp) / 'health.json'
+            with patch('core.loop._HEALTH_FILE', health):
+                _update_health(float('nan'), float('nan'),
+                               BotState.WAITING_SIGNAL, 0.0)
+            self._assert_strict_json(health)
+            self.assertIsNone(json.loads(health.read_text())['rsi'])
+
+    def test_heartbeat_sanitizes_existing_nan(self):
+        import json
+        import tempfile
+        from pathlib import Path
+        from core.loop import _heartbeat
+
+        with tempfile.TemporaryDirectory() as tmp:
+            health = Path(tmp) / 'health.json'
+            health.write_text('{"last_tick_ms": 1, "rsi": NaN, "last_close": 100.0}')
+            with patch('core.loop._HEALTH_FILE', health):
+                _heartbeat()
+            self._assert_strict_json(health)
+            data = json.loads(health.read_text())
+            self.assertIsNone(data['rsi'])
+            self.assertGreater(data['last_tick_ms'], 1)
+
+
+class TestRunSafeTick(unittest.IsolatedAsyncioTestCase):
+    """The per-tick guard: skippable errors are counted + skipped (loop survives);
+    CancelledError and CriticalTradingError propagate (never swallowed)."""
+
+    async def test_skippable_exception_does_not_propagate_and_counts(self):
+        st = _LoopState()
+        calls = []
+
+        async def alert(count, exc):
+            calls.append((count, exc))
+
+        async def work():
+            raise ValueError("bad candle")
+
+        # Must NOT raise — the loop survives.
+        await run_safe_tick(work, st, alert, threshold=5)
+        self.assertEqual(st.consecutive_fail, 1)
+        self.assertEqual(calls, [])  # below threshold
+
+    async def test_success_resets_counter(self):
+        st = _LoopState()
+        st.consecutive_fail = 3
+
+        async def alert(count, exc):
+            pass
+
+        async def work():
+            return None
+
+        await run_safe_tick(work, st, alert, threshold=5)
+        self.assertEqual(st.consecutive_fail, 0)
+
+    async def test_cancelled_error_propagates(self):
+        st = _LoopState()
+
+        async def alert(count, exc):
+            pass
+
+        async def work():
+            raise asyncio.CancelledError()
+
+        with self.assertRaises(asyncio.CancelledError):
+            await run_safe_tick(work, st, alert, threshold=5)
+
+    async def test_critical_error_propagates_and_is_not_counted(self):
+        st = _LoopState()
+
+        async def alert(count, exc):
+            pass
+
+        async def work():
+            raise CriticalTradingError("safety invariant violated")
+
+        with self.assertRaises(CriticalTradingError):
+            await run_safe_tick(work, st, alert, threshold=5)
+        self.assertEqual(st.consecutive_fail, 0)  # critical errors are not skippable
+
+
+class TestSkipStormEscalation(unittest.IsolatedAsyncioTestCase):
+    """A sustained skip-storm pauses new entries (creates the pause flag) and
+    alerts once — restarting wouldn't help when every tick fails."""
+
+    async def test_skip_storm_pauses_and_alerts(self):
+        import tempfile
+        from pathlib import Path
+        import core.loop as loop_mod
+
+        with tempfile.TemporaryDirectory() as td:
+            pause_file = Path(td) / 'pause.flag'
+            sent = []
+
+            async def fake_notify(msg):
+                sent.append(msg)
+
+            with patch.object(loop_mod, '_PAUSE_FILE', pause_file), \
+                 patch.object(loop_mod, 'notify', fake_notify):
+                st = loop_mod._LoopState()
+
+                async def work():
+                    raise ValueError('poison')
+
+                # Drive exactly threshold consecutive failures.
+                for _ in range(loop_mod._SKIP_STORM_THRESHOLD):
+                    await loop_mod.run_safe_tick(
+                        work, st, loop_mod._on_skip_storm_for_test(st),
+                        threshold=loop_mod._SKIP_STORM_THRESHOLD,
+                    )
+
+                self.assertTrue(pause_file.exists())
+                self.assertEqual(len(sent), 1)
+                self.assertIn('SKIP-STORM', sent[0])
 
 
 if __name__ == '__main__':

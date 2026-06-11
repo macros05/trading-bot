@@ -1,0 +1,2097 @@
+{
+  "ran_at_ms": 1781110250245,
+  "symbol": "BTC/USDT",
+  "runs": [
+    {
+      "family": "rsi_mr_5min",
+      "symbol": "BTC/USDT",
+      "n_candidates": 18,
+      "duration_sec": 33.3,
+      "config": {
+        "train_months": 3,
+        "test_months": 1,
+        "step_months": 1,
+        "min_train_trades": 15,
+        "min_test_candles": 200,
+        "warmup_bars": 13000
+      },
+      "label": "rsi_mr_5min__btc",
+      "num_folds": 21,
+      "folds": [
+        {
+          "fold_pnl_usdt": -102.3,
+          "fold_start_balance": 10000.0,
+          "fold": 0,
+          "train_from_ms": 1718879280000,
+          "train_to_ms": 1726655280000,
+          "test_from_ms": 1726655280000,
+          "test_to_ms": 1729247280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 41,
+            "sharpe_trade": -0.1535,
+            "net_pnl_usdt": -482.7254
+          },
+          "num_trades": 14
+        },
+        {
+          "fold_pnl_usdt": -789.38,
+          "fold_start_balance": 9897.7,
+          "fold": 1,
+          "train_from_ms": 1721471280000,
+          "train_to_ms": 1729247280000,
+          "test_from_ms": 1729247280000,
+          "test_to_ms": 1731839280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 145,
+            "sharpe_trade": -0.1233,
+            "net_pnl_usdt": -1130.4082
+          },
+          "num_trades": 73
+        },
+        {
+          "fold_pnl_usdt": -501.6,
+          "fold_start_balance": 9108.32,
+          "fold": 2,
+          "train_from_ms": 1724063280000,
+          "train_to_ms": 1731839280000,
+          "test_from_ms": 1731839280000,
+          "test_to_ms": 1734431280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 173,
+            "sharpe_trade": -0.0974,
+            "net_pnl_usdt": -1025.404
+          },
+          "num_trades": 74
+        },
+        {
+          "fold_pnl_usdt": -615.43,
+          "fold_start_balance": 8606.72,
+          "fold": 3,
+          "train_from_ms": 1726655280000,
+          "train_to_ms": 1734431280000,
+          "test_from_ms": 1734431280000,
+          "test_to_ms": 1737023280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 206,
+            "sharpe_trade": -0.0591,
+            "net_pnl_usdt": -753.1977
+          },
+          "num_trades": 34
+        },
+        {
+          "fold_pnl_usdt": -720.79,
+          "fold_start_balance": 7991.29,
+          "fold": 4,
+          "train_from_ms": 1729247280000,
+          "train_to_ms": 1737023280000,
+          "test_from_ms": 1737023280000,
+          "test_to_ms": 1739615280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 100,
+            "sharpe_trade": -0.1582,
+            "net_pnl_usdt": -934.7338
+          },
+          "num_trades": 28
+        },
+        {
+          "fold_pnl_usdt": -826.06,
+          "fold_start_balance": 7270.5,
+          "fold": 5,
+          "train_from_ms": 1731839280000,
+          "train_to_ms": 1739615280000,
+          "test_from_ms": 1739615280000,
+          "test_to_ms": 1742207280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 151,
+            "sharpe_trade": -0.1787,
+            "net_pnl_usdt": -1348.9125
+          },
+          "num_trades": 30
+        },
+        {
+          "fold_pnl_usdt": -195.7,
+          "fold_start_balance": 6444.44,
+          "fold": 6,
+          "train_from_ms": 1734431280000,
+          "train_to_ms": 1742207280000,
+          "test_from_ms": 1742207280000,
+          "test_to_ms": 1744799280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 119,
+            "sharpe_trade": -0.2916,
+            "net_pnl_usdt": -1667.8694
+          },
+          "num_trades": 35
+        },
+        {
+          "fold_pnl_usdt": -138.43,
+          "fold_start_balance": 6248.74,
+          "fold": 7,
+          "train_from_ms": 1737023280000,
+          "train_to_ms": 1744799280000,
+          "test_from_ms": 1744799280000,
+          "test_to_ms": 1747391280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 109,
+            "sharpe_trade": -0.2398,
+            "net_pnl_usdt": -1194.8946
+          },
+          "num_trades": 21
+        },
+        {
+          "fold_pnl_usdt": -350.03,
+          "fold_start_balance": 6110.32,
+          "fold": 8,
+          "train_from_ms": 1739615280000,
+          "train_to_ms": 1747391280000,
+          "test_from_ms": 1747391280000,
+          "test_to_ms": 1749983280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 102,
+            "sharpe_trade": -0.1744,
+            "net_pnl_usdt": -822.4787
+          },
+          "num_trades": 31
+        },
+        {
+          "fold_pnl_usdt": -366.16,
+          "fold_start_balance": 5760.29,
+          "fold": 9,
+          "train_from_ms": 1742207280000,
+          "train_to_ms": 1749983280000,
+          "test_from_ms": 1749983280000,
+          "test_to_ms": 1752575280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 87,
+            "sharpe_trade": -0.1947,
+            "net_pnl_usdt": -618.7858
+          },
+          "num_trades": 29
+        },
+        {
+          "fold_pnl_usdt": -622.86,
+          "fold_start_balance": 5394.13,
+          "fold": 10,
+          "train_from_ms": 1744799280000,
+          "train_to_ms": 1752575280000,
+          "test_from_ms": 1752575280000,
+          "test_to_ms": 1755167280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 259,
+            "sharpe_trade": -0.2287,
+            "net_pnl_usdt": -1425.7756
+          },
+          "num_trades": 88
+        },
+        {
+          "fold_pnl_usdt": -625.28,
+          "fold_start_balance": 4771.26,
+          "fold": 11,
+          "train_from_ms": 1747391280000,
+          "train_to_ms": 1755167280000,
+          "test_from_ms": 1755167280000,
+          "test_to_ms": 1757759280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th30_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 168,
+            "sharpe_trade": -0.3111,
+            "net_pnl_usdt": -1082.2331
+          },
+          "num_trades": 54
+        },
+        {
+          "fold_pnl_usdt": -517.8,
+          "fold_start_balance": 4145.99,
+          "fold": 12,
+          "train_from_ms": 1749983280000,
+          "train_to_ms": 1757759280000,
+          "test_from_ms": 1757759280000,
+          "test_to_ms": 1760351280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 85,
+            "sharpe_trade": -0.3225,
+            "net_pnl_usdt": -572.3449
+          },
+          "num_trades": 36
+        },
+        {
+          "fold_pnl_usdt": -134.86,
+          "fold_start_balance": 3628.19,
+          "fold": 13,
+          "train_from_ms": 1752575280000,
+          "train_to_ms": 1760351280000,
+          "test_from_ms": 1760351280000,
+          "test_to_ms": 1762943280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_trend_fixed_sl1_tp2",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 43,
+            "sharpe_trade": -0.3636,
+            "net_pnl_usdt": -350.918
+          },
+          "num_trades": 8
+        },
+        {
+          "fold_pnl_usdt": -723.26,
+          "fold_start_balance": 3493.33,
+          "fold": 14,
+          "train_from_ms": 1755167280000,
+          "train_to_ms": 1762943280000,
+          "test_from_ms": 1762943280000,
+          "test_to_ms": 1765535280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 279,
+            "sharpe_trade": -0.4119,
+            "net_pnl_usdt": -1625.1599
+          },
+          "num_trades": 107
+        },
+        {
+          "fold_pnl_usdt": -441.97,
+          "fold_start_balance": 2770.06,
+          "fold": 15,
+          "train_from_ms": 1757759280000,
+          "train_to_ms": 1765535280000,
+          "test_from_ms": 1765535280000,
+          "test_to_ms": 1768127280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 301,
+            "sharpe_trade": -0.3397,
+            "net_pnl_usdt": -1333.4978
+          },
+          "num_trades": 79
+        },
+        {
+          "fold_pnl_usdt": -535.24,
+          "fold_start_balance": 2328.09,
+          "fold": 16,
+          "train_from_ms": 1760351280000,
+          "train_to_ms": 1768127280000,
+          "test_from_ms": 1768127280000,
+          "test_to_ms": 1770719280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1_tp2",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 132,
+            "sharpe_trade": -0.3406,
+            "net_pnl_usdt": -767.0978
+          },
+          "num_trades": 54
+        },
+        {
+          "fold_pnl_usdt": -173.0,
+          "fold_start_balance": 1792.86,
+          "fold": 17,
+          "train_from_ms": 1762943280000,
+          "train_to_ms": 1770719280000,
+          "test_from_ms": 1770719280000,
+          "test_to_ms": 1773311280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 114,
+            "sharpe_trade": -0.3086,
+            "net_pnl_usdt": -448.0147
+          },
+          "num_trades": 38
+        },
+        {
+          "fold_pnl_usdt": -262.88,
+          "fold_start_balance": 1619.86,
+          "fold": 18,
+          "train_from_ms": 1765535280000,
+          "train_to_ms": 1773311280000,
+          "test_from_ms": 1773311280000,
+          "test_to_ms": 1775903280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 310,
+            "sharpe_trade": -0.2898,
+            "net_pnl_usdt": -782.2393
+          },
+          "num_trades": 93
+        },
+        {
+          "fold_pnl_usdt": -157.08,
+          "fold_start_balance": 1356.98,
+          "fold": 19,
+          "train_from_ms": 1768127280000,
+          "train_to_ms": 1775903280000,
+          "test_from_ms": 1775903280000,
+          "test_to_ms": 1778495280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 109,
+            "sharpe_trade": -0.2591,
+            "net_pnl_usdt": -243.0217
+          },
+          "num_trades": 73
+        },
+        {
+          "fold_pnl_usdt": -267.35,
+          "fold_start_balance": 1199.9,
+          "fold": 20,
+          "train_from_ms": 1770719280000,
+          "train_to_ms": 1778495280000,
+          "test_from_ms": 1778495280000,
+          "test_to_ms": 1781087280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_5min_th35_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 280,
+            "sharpe_trade": -0.2236,
+            "net_pnl_usdt": -340.5543
+          },
+          "num_trades": 116
+        }
+      ],
+      "initial_balance": 10000.0,
+      "final_balance": 932.5437,
+      "n_evaluations": 378,
+      "aggregate": {
+        "label": "rsi_mr_5min__btc",
+        "num_trades": 1115,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9067.4563,
+        "net_pnl_pct": -90.6746,
+        "total_fees": 0.0,
+        "win_rate_pct": 33.63,
+        "wr_lower_95": 30.92,
+        "breakeven_wr_long": 53.97,
+        "breakeven_wr_short": 53.97,
+        "sharpe_trade": -0.3185,
+        "sharpe_annual": -8.0971,
+        "max_drawdown_pct": 91.0284,
+        "profit_factor": 0.4733,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.5387,
+        "returns_kurt": 3.6915,
+        "by_side": {
+          "long": {
+            "trades": 1115,
+            "wins": 375,
+            "win_rate_pct": 33.63,
+            "wr_lower_95": 30.92,
+            "pnl_usdt": -9067.4563
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      }
+    },
+    {
+      "family": "rsi_mr_15min",
+      "symbol": "BTC/USDT",
+      "n_candidates": 18,
+      "duration_sec": 15.3,
+      "config": {
+        "train_months": 3,
+        "test_months": 1,
+        "step_months": 1,
+        "min_train_trades": 15,
+        "min_test_candles": 200,
+        "warmup_bars": 13000
+      },
+      "label": "rsi_mr_15min__btc",
+      "num_folds": 21,
+      "folds": [
+        {
+          "fold_pnl_usdt": -241.7,
+          "fold_start_balance": 10000.0,
+          "fold": 0,
+          "train_from_ms": 1718879280000,
+          "train_to_ms": 1726655280000,
+          "test_from_ms": 1726655280000,
+          "test_to_ms": 1729247280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 50,
+            "sharpe_trade": -0.1643,
+            "net_pnl_usdt": -1005.4525
+          },
+          "num_trades": 8
+        },
+        {
+          "fold_pnl_usdt": -38.08,
+          "fold_start_balance": 9758.3,
+          "fold": 1,
+          "train_from_ms": 1721471280000,
+          "train_to_ms": 1729247280000,
+          "test_from_ms": 1729247280000,
+          "test_to_ms": 1731839280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 50,
+            "sharpe_trade": -0.2291,
+            "net_pnl_usdt": -998.296
+          },
+          "num_trades": 19
+        },
+        {
+          "fold_pnl_usdt": 89.99,
+          "fold_start_balance": 9720.23,
+          "fold": 2,
+          "train_from_ms": 1724063280000,
+          "train_to_ms": 1731839280000,
+          "test_from_ms": 1731839280000,
+          "test_to_ms": 1734431280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 52,
+            "sharpe_trade": -0.0097,
+            "net_pnl_usdt": -69.7325
+          },
+          "num_trades": 25
+        },
+        {
+          "fold_pnl_usdt": -216.01,
+          "fold_start_balance": 9810.21,
+          "fold": 3,
+          "train_from_ms": 1726655280000,
+          "train_to_ms": 1734431280000,
+          "test_from_ms": 1734431280000,
+          "test_to_ms": 1737023280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 33,
+            "sharpe_trade": 0.086,
+            "net_pnl_usdt": 294.6882
+          },
+          "num_trades": 7
+        },
+        {
+          "fold_pnl_usdt": -247.65,
+          "fold_start_balance": 9594.2,
+          "fold": 4,
+          "train_from_ms": 1729247280000,
+          "train_to_ms": 1737023280000,
+          "test_from_ms": 1737023280000,
+          "test_to_ms": 1739615280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 34,
+            "sharpe_trade": 0.0846,
+            "net_pnl_usdt": 296.808
+          },
+          "num_trades": 9
+        },
+        {
+          "fold_pnl_usdt": -504.9,
+          "fold_start_balance": 9346.55,
+          "fold": 5,
+          "train_from_ms": 1731839280000,
+          "train_to_ms": 1739615280000,
+          "test_from_ms": 1739615280000,
+          "test_to_ms": 1742207280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 32,
+            "sharpe_trade": -0.032,
+            "net_pnl_usdt": -129.2612
+          },
+          "num_trades": 8
+        },
+        {
+          "fold_pnl_usdt": -139.41,
+          "fold_start_balance": 8841.66,
+          "fold": 6,
+          "train_from_ms": 1734431280000,
+          "train_to_ms": 1742207280000,
+          "test_from_ms": 1742207280000,
+          "test_to_ms": 1744799280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_trend_fixed_sl1_tp2",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 27,
+            "sharpe_trade": -0.1095,
+            "net_pnl_usdt": -370.4077
+          },
+          "num_trades": 14
+        },
+        {
+          "fold_pnl_usdt": -94.95,
+          "fold_start_balance": 8702.25,
+          "fold": 7,
+          "train_from_ms": 1737023280000,
+          "train_to_ms": 1744799280000,
+          "test_from_ms": 1744799280000,
+          "test_to_ms": 1747391280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th25_trend_atr_sl1.5_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 15,
+            "sharpe_trade": 0.0854,
+            "net_pnl_usdt": -8.8479
+          },
+          "num_trades": 11
+        },
+        {
+          "fold_pnl_usdt": -179.98,
+          "fold_start_balance": 8607.3,
+          "fold": 8,
+          "train_from_ms": 1739615280000,
+          "train_to_ms": 1747391280000,
+          "test_from_ms": 1747391280000,
+          "test_to_ms": 1749983280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th25_trend_atr_sl1.5_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 18,
+            "sharpe_trade": 0.0593,
+            "net_pnl_usdt": 17.9118
+          },
+          "num_trades": 7
+        },
+        {
+          "fold_pnl_usdt": -450.86,
+          "fold_start_balance": 8427.32,
+          "fold": 9,
+          "train_from_ms": 1742207280000,
+          "train_to_ms": 1749983280000,
+          "test_from_ms": 1749983280000,
+          "test_to_ms": 1752575280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 32,
+            "sharpe_trade": 0.0943,
+            "net_pnl_usdt": 204.4821
+          },
+          "num_trades": 8
+        },
+        {
+          "fold_pnl_usdt": -244.21,
+          "fold_start_balance": 7976.46,
+          "fold": 10,
+          "train_from_ms": 1744799280000,
+          "train_to_ms": 1752575280000,
+          "test_from_ms": 1752575280000,
+          "test_to_ms": 1755167280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 49,
+            "sharpe_trade": -0.1031,
+            "net_pnl_usdt": -363.9419
+          },
+          "num_trades": 17
+        },
+        {
+          "fold_pnl_usdt": -502.84,
+          "fold_start_balance": 7732.25,
+          "fold": 11,
+          "train_from_ms": 1747391280000,
+          "train_to_ms": 1755167280000,
+          "test_from_ms": 1755167280000,
+          "test_to_ms": 1757759280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th35_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 91,
+            "sharpe_trade": -0.2081,
+            "net_pnl_usdt": -1163.0512
+          },
+          "num_trades": 32
+        },
+        {
+          "fold_pnl_usdt": -576.02,
+          "fold_start_balance": 7229.41,
+          "fold": 12,
+          "train_from_ms": 1749983280000,
+          "train_to_ms": 1757759280000,
+          "test_from_ms": 1757759280000,
+          "test_to_ms": 1760351280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th35_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 89,
+            "sharpe_trade": -0.2671,
+            "net_pnl_usdt": -1204.0084
+          },
+          "num_trades": 34
+        },
+        {
+          "fold_pnl_usdt": -64.61,
+          "fold_start_balance": 6653.39,
+          "fold": 13,
+          "train_from_ms": 1752575280000,
+          "train_to_ms": 1760351280000,
+          "test_from_ms": 1760351280000,
+          "test_to_ms": 1762943280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 62,
+            "sharpe_trade": -0.2506,
+            "net_pnl_usdt": -807.2532
+          },
+          "num_trades": 31
+        },
+        {
+          "fold_pnl_usdt": -1138.95,
+          "fold_start_balance": 6588.79,
+          "fold": 14,
+          "train_from_ms": 1755167280000,
+          "train_to_ms": 1762943280000,
+          "test_from_ms": 1762943280000,
+          "test_to_ms": 1765535280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 76,
+            "sharpe_trade": -0.1266,
+            "net_pnl_usdt": -629.4698
+          },
+          "num_trades": 33
+        },
+        {
+          "fold_pnl_usdt": -260.4,
+          "fold_start_balance": 5449.84,
+          "fold": 15,
+          "train_from_ms": 1757759280000,
+          "train_to_ms": 1765535280000,
+          "test_from_ms": 1765535280000,
+          "test_to_ms": 1768127280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th25_notrend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 54,
+            "sharpe_trade": -0.1909,
+            "net_pnl_usdt": -639.686
+          },
+          "num_trades": 16
+        },
+        {
+          "fold_pnl_usdt": -863.83,
+          "fold_start_balance": 5189.44,
+          "fold": 16,
+          "train_from_ms": 1760351280000,
+          "train_to_ms": 1768127280000,
+          "test_from_ms": 1768127280000,
+          "test_to_ms": 1770719280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th25_notrend_fixed_sl1_tp2",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 69,
+            "sharpe_trade": -0.1503,
+            "net_pnl_usdt": -644.9376
+          },
+          "num_trades": 31
+        },
+        {
+          "fold_pnl_usdt": -419.12,
+          "fold_start_balance": 4325.62,
+          "fold": 17,
+          "train_from_ms": 1762943280000,
+          "train_to_ms": 1770719280000,
+          "test_from_ms": 1770719280000,
+          "test_to_ms": 1773311280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th35_notrend_fixed_sl1_tp2",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 195,
+            "sharpe_trade": -0.2576,
+            "net_pnl_usdt": -1928.4207
+          },
+          "num_trades": 59
+        },
+        {
+          "fold_pnl_usdt": -558.02,
+          "fold_start_balance": 3906.5,
+          "fold": 18,
+          "train_from_ms": 1765535280000,
+          "train_to_ms": 1773311280000,
+          "test_from_ms": 1773311280000,
+          "test_to_ms": 1775903280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th30_notrend_fixed_sl1_tp2",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 122,
+            "sharpe_trade": -0.1754,
+            "net_pnl_usdt": -918.9599
+          },
+          "num_trades": 28
+        },
+        {
+          "fold_pnl_usdt": -114.9,
+          "fold_start_balance": 3348.48,
+          "fold": 19,
+          "train_from_ms": 1768127280000,
+          "train_to_ms": 1775903280000,
+          "test_from_ms": 1775903280000,
+          "test_to_ms": 1778495280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th35_trend_fixed_sl1.5_tp3",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 35,
+            "sharpe_trade": -0.2211,
+            "net_pnl_usdt": -257.2639
+          },
+          "num_trades": 21
+        },
+        {
+          "fold_pnl_usdt": -397.43,
+          "fold_start_balance": 3233.58,
+          "fold": 20,
+          "train_from_ms": 1770719280000,
+          "train_to_ms": 1778495280000,
+          "test_from_ms": 1778495280000,
+          "test_to_ms": 1781087280000,
+          "test_candles": 43200,
+          "chosen_label": "rsi_mr_15min_th25_notrend_fixed_sl1_tp2",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 42,
+            "sharpe_trade": -0.0433,
+            "net_pnl_usdt": -78.2319
+          },
+          "num_trades": 24
+        }
+      ],
+      "initial_balance": 10000.0,
+      "final_balance": 2836.1487,
+      "n_evaluations": 378,
+      "aggregate": {
+        "label": "rsi_mr_15min__btc",
+        "num_trades": 442,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -7163.8513,
+        "net_pnl_pct": -71.6385,
+        "total_fees": 0.0,
+        "win_rate_pct": 34.39,
+        "wr_lower_95": 30.11,
+        "breakeven_wr_long": 49.27,
+        "breakeven_wr_short": 49.27,
+        "sharpe_trade": -0.2663,
+        "sharpe_annual": -4.2625,
+        "max_drawdown_pct": 72.6074,
+        "profit_factor": 0.5485,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.8546,
+        "returns_kurt": 2.6632,
+        "by_side": {
+          "long": {
+            "trades": 442,
+            "wins": 152,
+            "win_rate_pct": 34.39,
+            "wr_lower_95": 30.11,
+            "pnl_usdt": -7163.8513
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      }
+    },
+    {
+      "family": "donchian_breakout_1h",
+      "symbol": "BTC/USDT",
+      "n_candidates": 16,
+      "duration_sec": 12.5,
+      "config": {
+        "train_months": 3,
+        "test_months": 1,
+        "step_months": 1,
+        "min_train_trades": 15,
+        "min_test_candles": 200,
+        "warmup_bars": 131000
+      },
+      "label": "donchian_breakout_1h__btc",
+      "num_folds": 21,
+      "folds": [
+        {
+          "fold_pnl_usdt": -206.28,
+          "fold_start_balance": 10000.0,
+          "fold": 0,
+          "train_from_ms": 1718879280000,
+          "train_to_ms": 1726655280000,
+          "test_from_ms": 1726655280000,
+          "test_to_ms": 1729247280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n55_vol_noregime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 16,
+            "sharpe_trade": 0.0178,
+            "net_pnl_usdt": 163.0844
+          },
+          "num_trades": 8
+        },
+        {
+          "fold_pnl_usdt": 611.47,
+          "fold_start_balance": 9793.72,
+          "fold": 1,
+          "train_from_ms": 1721471280000,
+          "train_to_ms": 1729247280000,
+          "test_from_ms": 1729247280000,
+          "test_to_ms": 1731839280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_noregime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 29,
+            "sharpe_trade": -0.0783,
+            "net_pnl_usdt": -154.5609
+          },
+          "num_trades": 12
+        },
+        {
+          "fold_pnl_usdt": -287.05,
+          "fold_start_balance": 10405.18,
+          "fold": 2,
+          "train_from_ms": 1724063280000,
+          "train_to_ms": 1731839280000,
+          "test_from_ms": 1731839280000,
+          "test_to_ms": 1734431280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n55_novol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 17,
+            "sharpe_trade": 0.1643,
+            "net_pnl_usdt": 298.2896
+          },
+          "num_trades": 14
+        },
+        {
+          "fold_pnl_usdt": -462.09,
+          "fold_start_balance": 10118.13,
+          "fold": 3,
+          "train_from_ms": 1726655280000,
+          "train_to_ms": 1734431280000,
+          "test_from_ms": 1734431280000,
+          "test_to_ms": 1737023280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n55_vol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 27,
+            "sharpe_trade": 0.085,
+            "net_pnl_usdt": 220.7498
+          },
+          "num_trades": 7
+        },
+        {
+          "fold_pnl_usdt": -234.62,
+          "fold_start_balance": 9656.04,
+          "fold": 4,
+          "train_from_ms": 1729247280000,
+          "train_to_ms": 1737023280000,
+          "test_from_ms": 1737023280000,
+          "test_to_ms": 1739615280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n55_vol_noregime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 24,
+            "sharpe_trade": 0.1094,
+            "net_pnl_usdt": 510.7457
+          },
+          "num_trades": 6
+        },
+        {
+          "fold_pnl_usdt": 111.43,
+          "fold_start_balance": 9421.42,
+          "fold": 5,
+          "train_from_ms": 1731839280000,
+          "train_to_ms": 1739615280000,
+          "test_from_ms": 1739615280000,
+          "test_to_ms": 1742207280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_regime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 28,
+            "sharpe_trade": -0.2208,
+            "net_pnl_usdt": -226.1184
+          },
+          "num_trades": 3
+        },
+        {
+          "fold_pnl_usdt": -170.36,
+          "fold_start_balance": 9532.85,
+          "fold": 6,
+          "train_from_ms": 1734431280000,
+          "train_to_ms": 1742207280000,
+          "test_from_ms": 1742207280000,
+          "test_to_ms": 1744799280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_regime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 19,
+            "sharpe_trade": -0.1664,
+            "net_pnl_usdt": -175.3027
+          },
+          "num_trades": 5
+        },
+        {
+          "fold_pnl_usdt": 166.29,
+          "fold_start_balance": 9362.49,
+          "fold": 7,
+          "train_from_ms": 1737023280000,
+          "train_to_ms": 1744799280000,
+          "test_from_ms": 1744799280000,
+          "test_to_ms": 1747391280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_noregime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 24,
+            "sharpe_trade": -0.147,
+            "net_pnl_usdt": -195.1806
+          },
+          "num_trades": 12
+        },
+        {
+          "fold_pnl_usdt": -220.53,
+          "fold_start_balance": 9528.79,
+          "fold": 8,
+          "train_from_ms": 1739615280000,
+          "train_to_ms": 1747391280000,
+          "test_from_ms": 1747391280000,
+          "test_to_ms": 1749983280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 16,
+            "sharpe_trade": 0.1893,
+            "net_pnl_usdt": 386.1669
+          },
+          "num_trades": 4
+        },
+        {
+          "fold_pnl_usdt": -125.56,
+          "fold_start_balance": 9308.25,
+          "fold": 9,
+          "train_from_ms": 1742207280000,
+          "train_to_ms": 1749983280000,
+          "test_from_ms": 1749983280000,
+          "test_to_ms": 1752575280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_noregime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 39,
+            "sharpe_trade": 0.0288,
+            "net_pnl_usdt": 63.5668
+          },
+          "num_trades": 20
+        },
+        {
+          "fold_pnl_usdt": -532.52,
+          "fold_start_balance": 9182.69,
+          "fold": 10,
+          "train_from_ms": 1744799280000,
+          "train_to_ms": 1752575280000,
+          "test_from_ms": 1752575280000,
+          "test_to_ms": 1755167280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n55_vol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 15,
+            "sharpe_trade": 0.2554,
+            "net_pnl_usdt": 380.8993
+          },
+          "num_trades": 5
+        },
+        {
+          "fold_pnl_usdt": -509.14,
+          "fold_start_balance": 8650.17,
+          "fold": 11,
+          "train_from_ms": 1747391280000,
+          "train_to_ms": 1755167280000,
+          "test_from_ms": 1755167280000,
+          "test_to_ms": 1757759280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 21,
+            "sharpe_trade": -0.1271,
+            "net_pnl_usdt": -481.0797
+          },
+          "num_trades": 7
+        },
+        {
+          "fold_pnl_usdt": 8.76,
+          "fold_start_balance": 8141.02,
+          "fold": 12,
+          "train_from_ms": 1749983280000,
+          "train_to_ms": 1757759280000,
+          "test_from_ms": 1757759280000,
+          "test_to_ms": 1760351280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_novol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 32,
+            "sharpe_trade": -0.1943,
+            "net_pnl_usdt": -721.3088
+          },
+          "num_trades": 11
+        },
+        {
+          "fold_pnl_usdt": -717.58,
+          "fold_start_balance": 8149.79,
+          "fold": 13,
+          "train_from_ms": 1752575280000,
+          "train_to_ms": 1760351280000,
+          "test_from_ms": 1760351280000,
+          "test_to_ms": 1762943280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_novol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 33,
+            "sharpe_trade": -0.2887,
+            "net_pnl_usdt": -907.9049
+          },
+          "num_trades": 12
+        },
+        {
+          "fold_pnl_usdt": -300.85,
+          "fold_start_balance": 7432.2,
+          "fold": 14,
+          "train_from_ms": 1755167280000,
+          "train_to_ms": 1762943280000,
+          "test_from_ms": 1762943280000,
+          "test_to_ms": 1765535280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n55_novol_noregime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 35,
+            "sharpe_trade": -0.2695,
+            "net_pnl_usdt": -511.0219
+          },
+          "num_trades": 6
+        },
+        {
+          "fold_pnl_usdt": -502.1,
+          "fold_start_balance": 7131.36,
+          "fold": 15,
+          "train_from_ms": 1757759280000,
+          "train_to_ms": 1765535280000,
+          "test_from_ms": 1765535280000,
+          "test_to_ms": 1768127280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_noregime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 31,
+            "sharpe_trade": -0.0719,
+            "net_pnl_usdt": -21.3684
+          },
+          "num_trades": 13
+        },
+        {
+          "fold_pnl_usdt": -36.49,
+          "fold_start_balance": 6629.26,
+          "fold": 16,
+          "train_from_ms": 1760351280000,
+          "train_to_ms": 1768127280000,
+          "test_from_ms": 1768127280000,
+          "test_to_ms": 1770719280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_noregime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 40,
+            "sharpe_trade": -0.3033,
+            "net_pnl_usdt": -673.1889
+          },
+          "num_trades": 8
+        },
+        {
+          "fold_pnl_usdt": -63.79,
+          "fold_start_balance": 6592.77,
+          "fold": 17,
+          "train_from_ms": 1762943280000,
+          "train_to_ms": 1770719280000,
+          "test_from_ms": 1770719280000,
+          "test_to_ms": 1773311280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_noregime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 37,
+            "sharpe_trade": -0.2664,
+            "net_pnl_usdt": -658.1285
+          },
+          "num_trades": 14
+        },
+        {
+          "fold_pnl_usdt": -125.25,
+          "fold_start_balance": 6528.97,
+          "fold": 18,
+          "train_from_ms": 1765535280000,
+          "train_to_ms": 1773311280000,
+          "test_from_ms": 1773311280000,
+          "test_to_ms": 1775903280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_novol_regime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 16,
+            "sharpe_trade": -0.1324,
+            "net_pnl_usdt": -146.6281
+          },
+          "num_trades": 6
+        },
+        {
+          "fold_pnl_usdt": 39.27,
+          "fold_start_balance": 6403.72,
+          "fold": 19,
+          "train_from_ms": 1768127280000,
+          "train_to_ms": 1775903280000,
+          "test_from_ms": 1775903280000,
+          "test_to_ms": 1778495280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_regime_trail10",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 15,
+            "sharpe_trade": 0.088,
+            "net_pnl_usdt": 45.8151
+          },
+          "num_trades": 3
+        },
+        {
+          "fold_pnl_usdt": -150.93,
+          "fold_start_balance": 6442.99,
+          "fold": 20,
+          "train_from_ms": 1770719280000,
+          "train_to_ms": 1778495280000,
+          "test_from_ms": 1778495280000,
+          "test_to_ms": 1781087280000,
+          "test_candles": 43200,
+          "chosen_label": "donchian_1h_n20_vol_regime_atr_sl2.0_tp3.0",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 19,
+            "sharpe_trade": 0.1128,
+            "net_pnl_usdt": 212.1933
+          },
+          "num_trades": 2
+        }
+      ],
+      "initial_balance": 10000.0,
+      "final_balance": 6292.0513,
+      "n_evaluations": 336,
+      "aggregate": {
+        "label": "donchian_breakout_1h__btc",
+        "num_trades": 178,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -3707.9487,
+        "net_pnl_pct": -37.0795,
+        "total_fees": 0.0,
+        "win_rate_pct": 29.21,
+        "wr_lower_95": 23.03,
+        "breakeven_wr_long": 42.04,
+        "breakeven_wr_short": 42.04,
+        "sharpe_trade": -0.2361,
+        "sharpe_annual": -2.3988,
+        "max_drawdown_pct": 39.9406,
+        "profit_factor": 0.5945,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 1.1104,
+        "returns_kurt": 4.4378,
+        "by_side": {
+          "long": {
+            "trades": 178,
+            "wins": 52,
+            "win_rate_pct": 29.21,
+            "wr_lower_95": 23.03,
+            "pnl_usdt": -3707.9487
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      }
+    },
+    {
+      "family": "bb_rsi_15min",
+      "symbol": "BTC/USDT",
+      "n_candidates": 4,
+      "duration_sec": 2.7,
+      "config": {
+        "train_months": 3,
+        "test_months": 1,
+        "step_months": 1,
+        "min_train_trades": 15,
+        "min_test_candles": 200,
+        "warmup_bars": 1000
+      },
+      "label": "bb_rsi_15min__btc",
+      "num_folds": 21,
+      "folds": [
+        {
+          "fold_pnl_usdt": -795.29,
+          "fold_start_balance": 10000.0,
+          "fold": 0,
+          "train_from_ms": 1718879280000,
+          "train_to_ms": 1726655280000,
+          "test_from_ms": 1726655280000,
+          "test_to_ms": 1729247280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 156,
+            "sharpe_trade": -0.5861,
+            "net_pnl_usdt": -4201.3049
+          },
+          "num_trades": 35
+        },
+        {
+          "fold_pnl_usdt": -787.86,
+          "fold_start_balance": 9204.71,
+          "fold": 1,
+          "train_from_ms": 1721471280000,
+          "train_to_ms": 1729247280000,
+          "test_from_ms": 1729247280000,
+          "test_to_ms": 1731839280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 125,
+            "sharpe_trade": -0.5067,
+            "net_pnl_usdt": -2972.7304
+          },
+          "num_trades": 32
+        },
+        {
+          "fold_pnl_usdt": -240.9,
+          "fold_start_balance": 8416.85,
+          "fold": 2,
+          "train_from_ms": 1724063280000,
+          "train_to_ms": 1731839280000,
+          "test_from_ms": 1731839280000,
+          "test_to_ms": 1734431280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 100,
+            "sharpe_trade": -0.5081,
+            "net_pnl_usdt": -1860.9615
+          },
+          "num_trades": 32
+        },
+        {
+          "fold_pnl_usdt": -1028.42,
+          "fold_start_balance": 8175.95,
+          "fold": 3,
+          "train_from_ms": 1726655280000,
+          "train_to_ms": 1734431280000,
+          "test_from_ms": 1734431280000,
+          "test_to_ms": 1737023280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 99,
+            "sharpe_trade": -0.3874,
+            "net_pnl_usdt": -1481.8131
+          },
+          "num_trades": 53
+        },
+        {
+          "fold_pnl_usdt": -978.85,
+          "fold_start_balance": 7147.53,
+          "fold": 4,
+          "train_from_ms": 1729247280000,
+          "train_to_ms": 1737023280000,
+          "test_from_ms": 1737023280000,
+          "test_to_ms": 1739615280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 117,
+            "sharpe_trade": -0.39,
+            "net_pnl_usdt": -1596.9547
+          },
+          "num_trades": 56
+        },
+        {
+          "fold_pnl_usdt": -1123.58,
+          "fold_start_balance": 6168.68,
+          "fold": 5,
+          "train_from_ms": 1731839280000,
+          "train_to_ms": 1739615280000,
+          "test_from_ms": 1739615280000,
+          "test_to_ms": 1742207280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 141,
+            "sharpe_trade": -0.3693,
+            "net_pnl_usdt": -1651.6146
+          },
+          "num_trades": 76
+        },
+        {
+          "fold_pnl_usdt": -772.95,
+          "fold_start_balance": 5045.1,
+          "fold": 6,
+          "train_from_ms": 1734431280000,
+          "train_to_ms": 1742207280000,
+          "test_from_ms": 1742207280000,
+          "test_to_ms": 1744799280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 185,
+            "sharpe_trade": -0.4205,
+            "net_pnl_usdt": -1931.6814
+          },
+          "num_trades": 57
+        },
+        {
+          "fold_pnl_usdt": -254.53,
+          "fold_start_balance": 4272.15,
+          "fold": 7,
+          "train_from_ms": 1737023280000,
+          "train_to_ms": 1744799280000,
+          "test_from_ms": 1744799280000,
+          "test_to_ms": 1747391280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 189,
+            "sharpe_trade": -0.4492,
+            "net_pnl_usdt": -1719.3336
+          },
+          "num_trades": 24
+        },
+        {
+          "fold_pnl_usdt": -474.99,
+          "fold_start_balance": 4017.61,
+          "fold": 8,
+          "train_from_ms": 1739615280000,
+          "train_to_ms": 1747391280000,
+          "test_from_ms": 1747391280000,
+          "test_to_ms": 1749983280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 157,
+            "sharpe_trade": -0.477,
+            "net_pnl_usdt": -1402.3005
+          },
+          "num_trades": 45
+        },
+        {
+          "fold_pnl_usdt": -407.45,
+          "fold_start_balance": 3542.62,
+          "fold": 9,
+          "train_from_ms": 1742207280000,
+          "train_to_ms": 1749983280000,
+          "test_from_ms": 1749983280000,
+          "test_to_ms": 1752575280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 126,
+            "sharpe_trade": -0.6881,
+            "net_pnl_usdt": -1056.4202
+          },
+          "num_trades": 39
+        },
+        {
+          "fold_pnl_usdt": -246.93,
+          "fold_start_balance": 3135.17,
+          "fold": 10,
+          "train_from_ms": 1744799280000,
+          "train_to_ms": 1752575280000,
+          "test_from_ms": 1752575280000,
+          "test_to_ms": 1755167280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 108,
+            "sharpe_trade": -0.8725,
+            "net_pnl_usdt": -829.0318
+          },
+          "num_trades": 31
+        },
+        {
+          "fold_pnl_usdt": -480.75,
+          "fold_start_balance": 2888.24,
+          "fold": 11,
+          "train_from_ms": 1747391280000,
+          "train_to_ms": 1755167280000,
+          "test_from_ms": 1755167280000,
+          "test_to_ms": 1757759280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 115,
+            "sharpe_trade": -0.9028,
+            "net_pnl_usdt": -811.6897
+          },
+          "num_trades": 58
+        },
+        {
+          "fold_pnl_usdt": -323.75,
+          "fold_start_balance": 2407.49,
+          "fold": 12,
+          "train_from_ms": 1749983280000,
+          "train_to_ms": 1757759280000,
+          "test_from_ms": 1757759280000,
+          "test_to_ms": 1760351280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 128,
+            "sharpe_trade": -0.9298,
+            "net_pnl_usdt": -774.2924
+          },
+          "num_trades": 42
+        },
+        {
+          "fold_pnl_usdt": -291.1,
+          "fold_start_balance": 2083.74,
+          "fold": 13,
+          "train_from_ms": 1752575280000,
+          "train_to_ms": 1760351280000,
+          "test_from_ms": 1760351280000,
+          "test_to_ms": 1762943280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 131,
+            "sharpe_trade": -0.716,
+            "net_pnl_usdt": -701.254
+          },
+          "num_trades": 52
+        },
+        {
+          "fold_pnl_usdt": -309.91,
+          "fold_start_balance": 1792.65,
+          "fold": 14,
+          "train_from_ms": 1755167280000,
+          "train_to_ms": 1762943280000,
+          "test_from_ms": 1762943280000,
+          "test_to_ms": 1765535280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 152,
+            "sharpe_trade": -0.6691,
+            "net_pnl_usdt": -676.0003
+          },
+          "num_trades": 54
+        },
+        {
+          "fold_pnl_usdt": -145.1,
+          "fold_start_balance": 1482.74,
+          "fold": 15,
+          "train_from_ms": 1757759280000,
+          "train_to_ms": 1765535280000,
+          "test_from_ms": 1765535280000,
+          "test_to_ms": 1768127280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 148,
+            "sharpe_trade": -0.6221,
+            "net_pnl_usdt": -569.543
+          },
+          "num_trades": 37
+        },
+        {
+          "fold_pnl_usdt": -191.95,
+          "fold_start_balance": 1337.63,
+          "fold": 16,
+          "train_from_ms": 1760351280000,
+          "train_to_ms": 1768127280000,
+          "test_from_ms": 1768127280000,
+          "test_to_ms": 1770719280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 143,
+            "sharpe_trade": -0.6713,
+            "net_pnl_usdt": -478.9557
+          },
+          "num_trades": 62
+        },
+        {
+          "fold_pnl_usdt": -168.22,
+          "fold_start_balance": 1145.68,
+          "fold": 17,
+          "train_from_ms": 1762943280000,
+          "train_to_ms": 1770719280000,
+          "test_from_ms": 1770719280000,
+          "test_to_ms": 1773311280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 153,
+            "sharpe_trade": -0.4999,
+            "net_pnl_usdt": -413.4753
+          },
+          "num_trades": 52
+        },
+        {
+          "fold_pnl_usdt": -136.17,
+          "fold_start_balance": 977.46,
+          "fold": 18,
+          "train_from_ms": 1765535280000,
+          "train_to_ms": 1773311280000,
+          "test_from_ms": 1773311280000,
+          "test_to_ms": 1775903280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 150,
+            "sharpe_trade": -0.465,
+            "net_pnl_usdt": -329.264
+          },
+          "num_trades": 43
+        },
+        {
+          "fold_pnl_usdt": -73.55,
+          "fold_start_balance": 841.29,
+          "fold": 19,
+          "train_from_ms": 1768127280000,
+          "train_to_ms": 1775903280000,
+          "test_from_ms": 1775903280000,
+          "test_to_ms": 1778495280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 156,
+            "sharpe_trade": -0.5072,
+            "net_pnl_usdt": -310.3144
+          },
+          "num_trades": 25
+        },
+        {
+          "fold_pnl_usdt": -180.25,
+          "fold_start_balance": 767.74,
+          "fold": 20,
+          "train_from_ms": 1770719280000,
+          "train_to_ms": 1778495280000,
+          "test_from_ms": 1778495280000,
+          "test_to_ms": 1781087280000,
+          "test_candles": 43200,
+          "chosen_label": "bb_rsi_15min_th30_tb_tp2_sl1.5",
+          "selection_applied": true,
+          "train": {
+            "num_trades": 120,
+            "sharpe_trade": -0.7628,
+            "net_pnl_usdt": -255.4633
+          },
+          "num_trades": 79
+        }
+      ],
+      "initial_balance": 10000.0,
+      "final_balance": 587.4853,
+      "n_evaluations": 84,
+      "aggregate": {
+        "label": "bb_rsi_15min__btc",
+        "num_trades": 984,
+        "num_folds": 21,
+        "folds_with_trades": 21,
+        "net_pnl_usdt": -9412.5147,
+        "net_pnl_pct": -94.1251,
+        "total_fees": 0.0,
+        "win_rate_pct": 30.89,
+        "wr_lower_95": 28.09,
+        "breakeven_wr_long": 62.57,
+        "breakeven_wr_short": 62.57,
+        "sharpe_trade": -0.5793,
+        "sharpe_annual": -13.8366,
+        "max_drawdown_pct": 94.1251,
+        "profit_factor": 0.298,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.9424,
+        "returns_kurt": 4.3421,
+        "by_side": {
+          "long": {
+            "trades": 984,
+            "wins": 304,
+            "win_rate_pct": 30.89,
+            "wr_lower_95": 28.09,
+            "pnl_usdt": -9412.5147
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      }
+    },
+    {
+      "family": "baseline_live_v7",
+      "symbol": "BTC/USDT",
+      "n_candidates": 1,
+      "duration_sec": 50.0,
+      "config": {
+        "train_months": 3,
+        "test_months": 1,
+        "step_months": 1,
+        "min_train_trades": 15,
+        "min_test_candles": 200,
+        "warmup_bars": 0
+      },
+      "label": "baseline_live_v7__btc",
+      "num_folds": 21,
+      "folds": [
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 0,
+          "train_from_ms": 1718879280000,
+          "train_to_ms": 1726655280000,
+          "test_from_ms": 1726655280000,
+          "test_to_ms": 1729247280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 1,
+          "train_from_ms": 1721471280000,
+          "train_to_ms": 1729247280000,
+          "test_from_ms": 1729247280000,
+          "test_to_ms": 1731839280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 2,
+          "train_from_ms": 1724063280000,
+          "train_to_ms": 1731839280000,
+          "test_from_ms": 1731839280000,
+          "test_to_ms": 1734431280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 3,
+          "train_from_ms": 1726655280000,
+          "train_to_ms": 1734431280000,
+          "test_from_ms": 1734431280000,
+          "test_to_ms": 1737023280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 4,
+          "train_from_ms": 1729247280000,
+          "train_to_ms": 1737023280000,
+          "test_from_ms": 1737023280000,
+          "test_to_ms": 1739615280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 5,
+          "train_from_ms": 1731839280000,
+          "train_to_ms": 1739615280000,
+          "test_from_ms": 1739615280000,
+          "test_to_ms": 1742207280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 6,
+          "train_from_ms": 1734431280000,
+          "train_to_ms": 1742207280000,
+          "test_from_ms": 1742207280000,
+          "test_to_ms": 1744799280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 7,
+          "train_from_ms": 1737023280000,
+          "train_to_ms": 1744799280000,
+          "test_from_ms": 1744799280000,
+          "test_to_ms": 1747391280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 8,
+          "train_from_ms": 1739615280000,
+          "train_to_ms": 1747391280000,
+          "test_from_ms": 1747391280000,
+          "test_to_ms": 1749983280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10000.0,
+          "fold": 9,
+          "train_from_ms": 1742207280000,
+          "train_to_ms": 1749983280000,
+          "test_from_ms": 1749983280000,
+          "test_to_ms": 1752575280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": -20.25,
+          "fold_start_balance": 10000.0,
+          "fold": 10,
+          "train_from_ms": 1744799280000,
+          "train_to_ms": 1752575280000,
+          "test_from_ms": 1752575280000,
+          "test_to_ms": 1755167280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 1
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 9979.75,
+          "fold": 11,
+          "train_from_ms": 1747391280000,
+          "train_to_ms": 1755167280000,
+          "test_from_ms": 1755167280000,
+          "test_to_ms": 1757759280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 9979.75,
+          "fold": 12,
+          "train_from_ms": 1749983280000,
+          "train_to_ms": 1757759280000,
+          "test_from_ms": 1757759280000,
+          "test_to_ms": 1760351280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 9979.75,
+          "fold": 13,
+          "train_from_ms": 1752575280000,
+          "train_to_ms": 1760351280000,
+          "test_from_ms": 1760351280000,
+          "test_to_ms": 1762943280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 9979.75,
+          "fold": 14,
+          "train_from_ms": 1755167280000,
+          "train_to_ms": 1762943280000,
+          "test_from_ms": 1762943280000,
+          "test_to_ms": 1765535280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 9979.75,
+          "fold": 15,
+          "train_from_ms": 1757759280000,
+          "train_to_ms": 1765535280000,
+          "test_from_ms": 1765535280000,
+          "test_to_ms": 1768127280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 9979.75,
+          "fold": 16,
+          "train_from_ms": 1760351280000,
+          "train_to_ms": 1768127280000,
+          "test_from_ms": 1768127280000,
+          "test_to_ms": 1770719280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 304.82,
+          "fold_start_balance": 9979.75,
+          "fold": 17,
+          "train_from_ms": 1762943280000,
+          "train_to_ms": 1770719280000,
+          "test_from_ms": 1770719280000,
+          "test_to_ms": 1773311280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 1
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10284.57,
+          "fold": 18,
+          "train_from_ms": 1765535280000,
+          "train_to_ms": 1773311280000,
+          "test_from_ms": 1773311280000,
+          "test_to_ms": 1775903280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10284.57,
+          "fold": 19,
+          "train_from_ms": 1768127280000,
+          "train_to_ms": 1775903280000,
+          "test_from_ms": 1775903280000,
+          "test_to_ms": 1778495280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        },
+        {
+          "fold_pnl_usdt": 0,
+          "fold_start_balance": 10284.57,
+          "fold": 20,
+          "train_from_ms": 1770719280000,
+          "train_to_ms": 1778495280000,
+          "test_from_ms": 1778495280000,
+          "test_to_ms": 1781087280000,
+          "test_candles": 43200,
+          "chosen_label": "baseline_live_v7__btc",
+          "selection_applied": false,
+          "train": null,
+          "num_trades": 0
+        }
+      ],
+      "initial_balance": 10000.0,
+      "final_balance": 10284.5692,
+      "n_evaluations": 0,
+      "aggregate": {
+        "label": "baseline_live_v7__btc",
+        "num_trades": 2,
+        "num_folds": 21,
+        "folds_with_trades": 2,
+        "net_pnl_usdt": 284.5692,
+        "net_pnl_pct": 2.8457,
+        "total_fees": 0.0,
+        "win_rate_pct": 50.0,
+        "wr_lower_95": 9.45,
+        "breakeven_wr_long": 43.08,
+        "breakeven_wr_short": 40.0,
+        "sharpe_trade": 0.6192,
+        "sharpe_annual": 0.6667,
+        "max_drawdown_pct": 0.2025,
+        "profit_factor": 15.053,
+        "dsr_pvalue": 0.0,
+        "returns_skew": 0.0,
+        "returns_kurt": 3.0,
+        "by_side": {
+          "long": {
+            "trades": 2,
+            "wins": 1,
+            "win_rate_pct": 50.0,
+            "wr_lower_95": 9.45,
+            "pnl_usdt": 284.5692
+          },
+          "short": {
+            "trades": 0,
+            "wins": 0,
+            "win_rate_pct": 0.0,
+            "wr_lower_95": 0.0,
+            "pnl_usdt": 0.0
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,203 @@
+{
+  "months": 12,
+  "symbols": {
+    "BTC/USDT": {
+      "candles": 518404,
+      "baseline": {
+        "label": "baseline",
+        "num_trades": 23,
+        "net_pnl_usdt": 864.8939,
+        "net_pnl_pct": 8.6489,
+        "gross_pnl_usdt": 1053.6508,
+        "fees_paid_usdt": 188.7568,
+        "slippage_cost_usdt": 94.9055,
+        "win_rate_pct": 56.52,
+        "max_drawdown_pct": 4.6921,
+        "sharpe_ratio": 0.2676,
+        "profit_factor": 1.7273,
+        "avg_win_usdt": 158.0049,
+        "avg_loss_usdt": -118.9169,
+        "best_trade": 167.1256,
+        "worst_trade": -141.3368
+      },
+      "champions": {
+        "champion-ADX<45": {
+          "label": "champion-ADX<45",
+          "num_trades": 9,
+          "net_pnl_usdt": 834.6723,
+          "net_pnl_pct": 8.3467,
+          "gross_pnl_usdt": 909.3311,
+          "fees_paid_usdt": 74.6587,
+          "slippage_cost_usdt": 37.7843,
+          "win_rate_pct": 77.78,
+          "max_drawdown_pct": 1.3761,
+          "sharpe_ratio": 0.695,
+          "profit_factor": 3.9284,
+          "avg_win_usdt": 159.9568,
+          "avg_loss_usdt": -142.5128,
+          "best_trade": 167.1256,
+          "worst_trade": -144.2045
+        },
+        "champion-ADX<55": {
+          "label": "champion-ADX<55",
+          "num_trades": 12,
+          "net_pnl_usdt": 775.5374,
+          "net_pnl_pct": 7.7554,
+          "gross_pnl_usdt": 874.9598,
+          "fees_paid_usdt": 99.4224,
+          "slippage_cost_usdt": 50.1489,
+          "win_rate_pct": 66.67,
+          "max_drawdown_pct": 2.2451,
+          "sharpe_ratio": 0.4634,
+          "profit_factor": 2.5637,
+          "avg_win_usdt": 158.937,
+          "avg_loss_usdt": -123.9897,
+          "best_trade": 167.1256,
+          "worst_trade": -139.6473
+        }
+      }
+    },
+    "ETH/USDT": {
+      "candles": 518404,
+      "baseline": {
+        "label": "baseline",
+        "num_trades": 32,
+        "net_pnl_usdt": -15.4684,
+        "net_pnl_pct": -0.1547,
+        "gross_pnl_usdt": 236.7357,
+        "fees_paid_usdt": 252.2041,
+        "slippage_cost_usdt": 126.2205,
+        "win_rate_pct": 43.75,
+        "max_drawdown_pct": 9.5871,
+        "sharpe_ratio": -0.0035,
+        "profit_factor": 0.9928,
+        "avg_win_usdt": 152.2769,
+        "avg_loss_usdt": -119.297,
+        "best_trade": 162.6876,
+        "worst_trade": -154.4982
+      },
+      "champions": {
+        "champion-ADX<45": {
+          "label": "champion-ADX<45",
+          "num_trades": 5,
+          "net_pnl_usdt": 480.8543,
+          "net_pnl_pct": 4.8085,
+          "gross_pnl_usdt": 521.1135,
+          "fees_paid_usdt": 40.2592,
+          "slippage_cost_usdt": 20.3903,
+          "win_rate_pct": 80.0,
+          "max_drawdown_pct": 1.545,
+          "sharpe_ratio": 0.6858,
+          "profit_factor": 4.1124,
+          "avg_win_usdt": 158.8381,
+          "avg_loss_usdt": -154.4982,
+          "best_trade": 165.6615,
+          "worst_trade": -154.4982
+        },
+        "champion-ADX<55": {
+          "label": "champion-ADX<55",
+          "num_trades": 8,
+          "net_pnl_usdt": 676.4946,
+          "net_pnl_pct": 6.7649,
+          "gross_pnl_usdt": 741.1374,
+          "fees_paid_usdt": 64.6429,
+          "slippage_cost_usdt": 32.6922,
+          "win_rate_pct": 75.0,
+          "max_drawdown_pct": 1.545,
+          "sharpe_ratio": 0.6184,
+          "profit_factor": 3.483,
+          "avg_win_usdt": 158.158,
+          "avg_loss_usdt": -136.2266,
+          "best_trade": 166.183,
+          "worst_trade": -154.4982
+        }
+      }
+    },
+    "SOL/USDT": {
+      "candles": 518404,
+      "baseline": {
+        "label": "baseline",
+        "num_trades": 29,
+        "net_pnl_usdt": -1414.3268,
+        "net_pnl_pct": -14.1433,
+        "gross_pnl_usdt": -1205.4558,
+        "fees_paid_usdt": 208.871,
+        "slippage_cost_usdt": 103.8325,
+        "win_rate_pct": 24.14,
+        "max_drawdown_pct": 18.1536,
+        "sharpe_ratio": -0.462,
+        "profit_factor": 0.3997,
+        "avg_win_usdt": 134.5317,
+        "avg_loss_usdt": -107.0931,
+        "best_trade": 144.2488,
+        "worst_trade": -124.6594
+      },
+      "champions": {
+        "champion-ADX<45": {
+          "label": "champion-ADX<45",
+          "num_trades": 3,
+          "net_pnl_usdt": -334.2924,
+          "net_pnl_pct": -3.3429,
+          "gross_pnl_usdt": -310.5642,
+          "fees_paid_usdt": 23.7281,
+          "slippage_cost_usdt": 11.7087,
+          "win_rate_pct": 0.0,
+          "max_drawdown_pct": 3.3429,
+          "sharpe_ratio": -31.2687,
+          "profit_factor": 0.0,
+          "avg_win_usdt": 0.0,
+          "avg_loss_usdt": -111.4308,
+          "best_trade": -108.8624,
+          "worst_trade": -115.4993
+        },
+        "champion-ADX<55": {
+          "label": "champion-ADX<55",
+          "num_trades": 15,
+          "net_pnl_usdt": -891.2836,
+          "net_pnl_pct": -8.9128,
+          "gross_pnl_usdt": -779.0945,
+          "fees_paid_usdt": 112.1891,
+          "slippage_cost_usdt": 55.7048,
+          "win_rate_pct": 20.0,
+          "max_drawdown_pct": 10.7858,
+          "sharpe_ratio": -0.568,
+          "profit_factor": 0.3237,
+          "avg_win_usdt": 142.1714,
+          "avg_loss_usdt": -109.8165,
+          "best_trade": 153.0365,
+          "worst_trade": -124.6594
+        }
+      }
+    }
+  },
+  "thresholds": [
+    45.0,
+    55.0
+  ],
+  "combined": {
+    "baseline": {
+      "net_pnl_usdt": -564.9013,
+      "num_trades": 84,
+      "wins": 34,
+      "fees_paid_usdt": 649.8319,
+      "slippage_cost_usdt": 324.9585,
+      "win_rate_pct": 40.48
+    },
+    "champion-ADX<45": {
+      "net_pnl_usdt": 981.2341999999999,
+      "num_trades": 17,
+      "wins": 11,
+      "fees_paid_usdt": 138.64600000000002,
+      "slippage_cost_usdt": 69.88329999999999,
+      "win_rate_pct": 64.71
+    },
+    "champion-ADX<55": {
+      "net_pnl_usdt": 560.7484000000002,
+      "num_trades": 35,
+      "wins": 17,
+      "fees_paid_usdt": 276.2544,
+      "slippage_cost_usdt": 138.5459,
+      "win_rate_pct": 48.57
+    }
+  }
+}

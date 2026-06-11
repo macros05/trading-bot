@@ -1,0 +1,20 @@
+{
+  "long_only": {
+    "trades": 10,
+    "win_rate": 0.6,
+    "pnl_usdt": 8480.62,
+    "sharpe": 0.3325
+  },
+  "short_only": {
+    "trades": 25,
+    "win_rate": 0.44,
+    "pnl_usdt": 16407.66,
+    "sharpe": 0.1821
+  },
+  "combined": {
+    "trades": 26,
+    "win_rate": 0.4230769230769231,
+    "pnl_usdt": 14144.15,
+    "sharpe": 0.1521
+  }
+}

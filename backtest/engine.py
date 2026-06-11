@@ -206,6 +206,29 @@ def _close_position(
     return trade, balance + pnl_usdt
 
 
+def simulate_tick(close: float, state: dict) -> dict:
+    """Pure per-tick exit decision. Side-aware.
+
+    state keys: side ('long'|'short'), entry_price, qty, sl_pct, tp_pct
+    Returns: {'exit_reason': 'take_profit'|'stop_loss'|None, 'pnl_usdt': float}.
+    pnl_usdt is meaningful only when exit_reason is not None; callers must
+    not use it on the no-exit branch.
+    """
+    side = state['side']
+    if side not in ('long', 'short'):
+        raise ValueError(f'invalid side: {side!r}')
+    entry = state['entry_price']
+    qty = state['qty']
+    sign = 1.0 if side == 'long' else -1.0
+    change = sign * (close - entry) / entry
+    pnl_usdt = sign * (close - entry) * qty
+    if change <= -state['sl_pct']:
+        return {'exit_reason': 'stop_loss', 'pnl_usdt': pnl_usdt}
+    if change >= state['tp_pct']:
+        return {'exit_reason': 'take_profit', 'pnl_usdt': pnl_usdt}
+    return {'exit_reason': None, 'pnl_usdt': 0.0}
+
+
 def _process_bar_config(
     close: float,
     sma_val: float | None,
