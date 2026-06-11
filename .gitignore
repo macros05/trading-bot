@@ -14,6 +14,7 @@ trades_history.json
 data/bot_state.json
 data/bot_health.json
 data/trades_history.json
+data/ai_chat_history.json
 data/*.db
 data/*.db-shm
 data/*.db-wal

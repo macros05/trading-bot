@@ -5,22 +5,20 @@ Long-polling Telegram bot that:
   gets a reply when they send those in Telegram (previously these were
   defined in telegram_commands.py but never reachable — there was no
   inbound listener at all).
-- Answers free-form questions in Spanish using Gemini, with a snapshot of
-  the bot's current state injected into the prompt: open position,
-  daily PnL, latest trades, watchdog health, recent log lines.
+- Answers free-form questions in Spanish using Gemini with native function
+  calling: a set of strictly read-only tools (telegram_ai_tools.py) lets the
+  model pull trade history, daily PnL, live config, logs and the backtest
+  verdict on demand, with short-term conversation memory (last 8 exchanges,
+  telegram_chat_memory.py → data/ai_chat_history.json).
 
 Runs as an asyncio task started from main.py.
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
 import os
-from collections import deque
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
 
 from google import genai
 from google.genai import types
@@ -33,6 +31,9 @@ from telegram.ext import (
     filters,
 )
 
+import telegram_ai_tools
+import telegram_chat_memory
+
 logger = logging.getLogger(__name__)
 
 _TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -41,106 +42,109 @@ _ALLOWED_CHAT_ID = int(_CHAT_ID_RAW) if _CHAT_ID_RAW.isdigit() else None
 _GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 _MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-_DATA_DIR = Path("data")
-_STATE_FILE = _DATA_DIR / "bot_state.json"
-_TRADES_FILE = _DATA_DIR / "trades_history.json"
-_HEALTH_FILE = _DATA_DIR / "bot_health.json"
-_BOT_LOG = Path("bot.log")
 _MAX_TG_LEN = 4000
+_MAX_TOOL_ROUNDS = 4
+_AI_UNAVAILABLE_MSG = "⚠️ IA temporalmente no disponible, prueba en unos segundos."
 
-_SYSTEM_PROMPT = """Eres el asistente del **Trading Bot de Marcos** (BTC/USDT futuros en Binance).
+_SYSTEM_PROMPT = """Eres el asistente del **Trading Bot de Marcos** (BTC/USDT futuros en Binance, \
+estrategia RSI mean-reversion con filtros, circuit breaker de pérdida diaria).
 
-Estrategia activa: RSI<40 + close>SMA20 + ADX<45. Modo paper / live según
-configuración. Hay un circuit breaker que pausa el bot si la pérdida diaria
-supera el 3%.
-
-Tu trabajo: responder en español preguntas de Marcos sobre el estado del bot
-— posición abierta, PnL del día, últimas operaciones, salud del WebSocket,
-indicadores recientes. Datos en el bloque `# Estado actual`.
+Tienes HERRAMIENTAS de solo lectura. LLÁMALAS siempre que la pregunta toque datos, \
+estado, historial o configuración — nunca respondas de memoria ni digas "no tengo \
+acceso" sin haber probado la herramienta adecuada:
+- get_status → estado actual, posición abierta + PnL no realizado, pausa, último tick.
+- get_trades → historial de trades cerrados (ventana en días, filtro WIN/LOSS) con \
+win rate y PnL neto.
+- get_daily_pnl → PnL realizado agregado por día con win rate diario.
+- get_strategy_config → parámetros vivos (umbral RSI, SL/TP, trailing, filtros, \
+circuit breaker, sesiones); explica "por qué entró / no entró".
+- get_log_tail → últimas líneas de bot.log (con grep opcional).
+- get_backtest_verdict → veredicto del estudio walk-forward (por qué está pausado / si hay edge).
 
 Reglas:
-- Responde en **español** y conciso. 1-3 frases si la respuesta cabe ahí.
-- No inventes números — si falta un dato, dilo.
-- No hagas recomendaciones de trading ni operativa nueva — sólo informa de
-  lo que muestra el estado actual.
-- Si la pregunta no es sobre este bot, redirige a Marcos a macrosAssistant.
+- Responde SIEMPRE en español y conciso (1-4 frases si caben). Nada de Markdown pesado.
+- NUNCA inventes números: si una herramienta no devuelve el dato o viene vacía, \
+dilo claramente en vez de estimar.
+- Solo informas: no recomiendas operaciones nuevas ni puedes ejecutar órdenes, \
+pausar o modificar nada.
+- Si la pregunta NO trata de este trading bot, responde en UNA sola línea: que para \
+eso está @macrosAssistant, y que aquí puedes responder p. ej. "¿cuánto llevo este \
+mes?", "¿por qué está pausado el bot?" o "¿qué dice el último backtest?".
 """
 
 
-def _read_json(path: Path, default: Any) -> Any:
-    try:
-        return json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return default
-
-
-def _tail_log(n: int = 30) -> list[str]:
-    if not _BOT_LOG.exists():
+def _extract_function_calls(candidate: types.Candidate) -> list[types.Part]:
+    if candidate.content is None or not candidate.content.parts:
         return []
-    try:
-        with _BOT_LOG.open("rb") as f:
-            f.seek(0, 2)
-            size = f.tell()
-            chunk = min(size, 64 * 1024)
-            f.seek(size - chunk, 0)
-            data = f.read().decode("utf-8", errors="replace")
-        return list(deque(data.splitlines(), maxlen=n))
-    except OSError:
-        return []
+    return [p for p in candidate.content.parts if p.function_call is not None]
 
 
-def _build_state_snapshot() -> str:
-    state = _read_json(_STATE_FILE, {})
-    health = _read_json(_HEALTH_FILE, {})
-    trades = _read_json(_TRADES_FILE, [])
-    last_trades = trades[-5:] if isinstance(trades, list) else []
-    summary = {
-        "now_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "bot_state": state.get("state"),
-        "open_position": state.get("position"),
-        "daily_pnl_usdt": state.get("daily_pnl"),
-        "daily_pnl_date": state.get("daily_pnl_date"),
-        "paused": Path("data/pause.flag").exists(),
-        "health": {
-            "last_tick_iso": health.get("last_tick_iso"),
-            "last_close": health.get("last_close"),
-            "rsi14": health.get("rsi"),
-            "sma20": health.get("sma20"),
-            "state": health.get("state"),
-            "daily_pnl_pct": health.get("daily_pnl_pct"),
-        },
-        "trades_total": len(trades) if isinstance(trades, list) else 0,
-        "last_5_trades": last_trades,
-        "log_tail": _tail_log(20),
-    }
-    return "# Estado actual\n" + json.dumps(summary, indent=2, ensure_ascii=False, default=str)
+def _extract_text(candidate: types.Candidate) -> str:
+    if candidate.content is None or not candidate.content.parts:
+        return ""
+    return "".join(p.text for p in candidate.content.parts if p.text)
 
 
-async def _ai_answer(user_message: str) -> str:
-    if not _GEMINI_KEY:
-        return "⚠️ Gemini no configurado (falta GEMINI_API_KEY en .env)."
-    snapshot = _build_state_snapshot()
+def _build_contents(user_message: str) -> list[types.Content]:
+    contents: list[types.Content] = []
+    for exchange in telegram_chat_memory.load_exchanges():
+        contents.append(types.Content(
+            role="user", parts=[types.Part(text=exchange.get("user", ""))]))
+        contents.append(types.Content(
+            role="model", parts=[types.Part(text=exchange.get("assistant", ""))]))
+    contents.append(types.Content(role="user", parts=[types.Part(text=user_message)]))
+    return contents
+
+
+async def _agent_loop(contents: list[types.Content]) -> str:
+    """Gemini agent loop with read-only function calling, max 4 rounds."""
     client = genai.Client(api_key=_GEMINI_KEY)
     config = types.GenerateContentConfig(
         system_instruction=_SYSTEM_PROMPT,
-        temperature=0.6,
+        tools=[types.Tool(function_declarations=telegram_ai_tools.build_tool_declarations())],
+        temperature=0.4,
     )
-    contents = [
-        types.Content(
-            role="user",
-            parts=[types.Part(text=f"{snapshot}\n\n# Pregunta\n{user_message}")],
-        ),
-    ]
-    try:
+    for _ in range(_MAX_TOOL_ROUNDS):
         response = await client.aio.models.generate_content(
             model=_MODEL,
             contents=contents,
             config=config,
         )
-        return (response.text or "").strip() or "(Gemini devolvió respuesta vacía)"
-    except Exception as exc:
+        candidate = response.candidates[0]
+        function_calls = _extract_function_calls(candidate)
+        if not function_calls:
+            return _extract_text(candidate).strip()
+
+        tool_results: list[types.Part] = []
+        for part in function_calls:
+            fc = part.function_call
+            args = dict(fc.args or {})
+            logger.info("trading_ai tool call: %s(%r)", fc.name, args)
+            result = await asyncio.to_thread(telegram_ai_tools.execute_tool, fc.name, args)
+            tool_results.append(types.Part(
+                function_response=types.FunctionResponse(
+                    name=fc.name,
+                    response={"result": result},
+                )
+            ))
+        contents.append(candidate.content)
+        contents.append(types.Content(role="user", parts=tool_results))
+    return ""
+
+
+async def _ai_answer(user_message: str) -> str:
+    if not _GEMINI_KEY:
+        return "⚠️ Gemini no configurado (falta GEMINI_API_KEY en .env)."
+    contents = await asyncio.to_thread(_build_contents, user_message)
+    try:
+        reply = await _agent_loop(contents)
+    except Exception:
         logger.exception("ai_answer failed")
-        return f"⚠️ Error AI: {exc}"
+        return _AI_UNAVAILABLE_MSG
+    if not reply:
+        return _AI_UNAVAILABLE_MSG
+    await asyncio.to_thread(telegram_chat_memory.save_exchange, user_message, reply)
+    return reply
 
 
 def _is_authorized(update: Update) -> bool:
@@ -215,7 +219,6 @@ async def run() -> None:
     logger.info("trading telegram listener started (long polling)")
     try:
         # Block forever — the task is cancelled on shutdown.
-        import asyncio
         await asyncio.Event().wait()
     finally:
         try:
